@@ -13,22 +13,70 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 
+def _build_tool_env() -> dict[str, str]:
+    env = os.environ.copy()
+    extra_paths: list[str] = []
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if isinstance(meipass, str) and meipass:
+        extra_paths.append(meipass)
+
+    try:
+        extra_paths.append(str(Path(sys.executable).resolve().parent))
+    except Exception:
+        pass
+
+    existing = env.get("PATH", "")
+    merged = os.pathsep.join([*extra_paths, existing]) if existing else os.pathsep.join(extra_paths)
+    env["PATH"] = merged
+    return env
+
+
+def _resolve_executable(exe: str) -> str:
+    candidate = Path(exe)
+
+    if candidate.is_file():
+        return str(candidate)
+
+    if candidate.is_absolute():
+        # In onefile mode, parent and child extractor processes use different
+        # temporary extraction dirs. If a stale absolute path is passed in,
+        # remap to this process's bundled copy by executable name.
+        meipass = getattr(sys, "_MEIPASS", None)
+        if isinstance(meipass, str) and meipass and candidate.name:
+            bundled = Path(meipass) / candidate.name
+            if bundled.is_file():
+                return str(bundled)
+        return exe
+
+    return exe
+
+
 def _run(cmd: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    return proc.returncode, proc.stdout
+    if cmd:
+        cmd = [*cmd]
+        cmd[0] = _resolve_executable(cmd[0])
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=_build_tool_env(),
+        )
+        return proc.returncode, proc.stdout
+    except FileNotFoundError:
+        tool = cmd[0] if cmd else "(unknown)"
+        return 127, f"Tool not found: {tool}"
 
 
 def _probe(ffprobe_exe: str, src: Path, out_json: Path) -> tuple[bool, str]:

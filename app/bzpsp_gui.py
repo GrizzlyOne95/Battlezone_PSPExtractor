@@ -351,6 +351,33 @@ class BZPSPGUI:
                 return str(cand)
         return name
 
+    def _movie_tool_arg(self, raw_value: str, fallback: str) -> str:
+        value = raw_value.strip() or fallback
+        p = Path(value)
+
+        if not self._is_frozen():
+            return value
+
+        meipass = getattr(sys, "_MEIPASS", None)
+        if not isinstance(meipass, str) or not meipass:
+            return value
+
+        # Parent and child onefile processes use different temp extraction dirs.
+        # Avoid passing absolute _MEIPASS tool paths between processes.
+        if p.is_absolute():
+            try:
+                resolved = p.resolve()
+                meipass_path = Path(meipass).resolve()
+                if resolved == meipass_path or meipass_path in resolved.parents:
+                    return p.name or fallback
+            except Exception:
+                pass
+
+            if not p.exists() and p.name:
+                return p.name
+
+        return value
+
     def _build_ui(self) -> None:
         wrap = ttk.Frame(self.root, style="Transparent.TFrame")
         wrap.pack(fill="both", expand=True, padx=10, pady=10)
@@ -941,8 +968,8 @@ class BZPSPGUI:
             "--movie-root", str(self.paths["movie_root"]),
             "--out-root", str(self.paths["movie_out"]),
             "--mode", self.var_movie_mode.get().strip() or "all",
-            "--ffmpeg", self.var_ffmpeg.get().strip() or "ffmpeg",
-            "--ffprobe", self.var_ffprobe.get().strip() or "ffprobe",
+            "--ffmpeg", self._movie_tool_arg(self.var_ffmpeg.get(), "ffmpeg"),
+            "--ffprobe", self._movie_tool_arg(self.var_ffprobe.get(), "ffprobe"),
             ],
         )
         if self.var_movie_overwrite.get():
