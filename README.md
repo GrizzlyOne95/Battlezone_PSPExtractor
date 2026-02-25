@@ -2,6 +2,9 @@
 
 Standalone GUI front-end for Battlezone PSP extraction workflows.
 
+<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/06d9034a-d956-4ef4-9f1f-7566d31a962a" />
+
+
 This app wraps the extraction scripts in `extractors`:
 - `extract_psp_txd_textures.py`
 - `extract_psp_rws_geometry.py`
