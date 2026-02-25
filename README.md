@@ -100,3 +100,7 @@ git status
 
 ## Notes
 - Input and output roots are selected in the GUI; no workspace-specific default paths are hardcoded.
+
+## Credits
+- DragonFF authors for establishing a good baseline for extracting TXD/RWS
+- "Null" Software for extensive initial reverse engineering 
