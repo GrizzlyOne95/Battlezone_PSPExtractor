@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Build outputs
+build/
+dist/
+release/
+*.spec
+
+# Local generated assets
+*.ico
+
+# Local GUI state
+bzpsp_gui_config.json
+
+# Optional local FFmpeg binaries used for packaging
+ffmpeg.exe
+ffprobe.exe

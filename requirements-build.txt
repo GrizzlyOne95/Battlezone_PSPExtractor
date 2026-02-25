@@ -1,0 +1,2 @@
+pyinstaller>=6.0.0
+# Pillow is used during build_exe.bat to convert PNG icon -> ICO

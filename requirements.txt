@@ -1,0 +1,3 @@
+Pillow>=10.0.0
+pycdlib>=1.14.0
+# External runtime dependency (not installed by pip): ffmpeg + ffprobe
