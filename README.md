@@ -44,11 +44,13 @@ build_exe.bat
 ```
 
 Output folder:
-- `dist\BZPSP_Extractor\`
+- One-file EXE: `dist\BZPSP_Extractor.exe`
+- Redistributable folder with notices/licenses: `dist\BZPSP_Extractor\`
 
 Build behavior:
 - Uses `038_PU_Ammo_big.png` as the EXE icon (converted to `.ico` during build)
-- Auto-bundles `ffmpeg.exe` and `ffprobe.exe` into the app package (`_internal`)
+- Uses PyInstaller `--onefile` (no required `_internal` folder at runtime)
+- Auto-bundles `ffmpeg.exe` and `ffprobe.exe` into the executable
   - Looks first in repo root, then in system `PATH`
   - Build fails if either executable is missing
 - Copies project and third-party notices into the build output
@@ -61,6 +63,7 @@ What it does:
   - Windows
   - macOS
   - Linux
+- Uses PyInstaller `--onefile` builds
 - Bundles FFmpeg binaries found on each runner
 - Uploads zipped build artifacts
 - On tag pushes matching `v*`, creates a GitHub Release and attaches all platform zips

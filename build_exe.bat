@@ -6,7 +6,8 @@ set "ICON_PNG=%cd%\038_PU_Ammo_big.png"
 set "ICON_ICO=%cd%\build\bzpsp_icon.ico"
 set "FFMPEG_EXE="
 set "FFPROBE_EXE="
-set "DIST_DIR=%cd%\dist\BZPSP_Extractor"
+set "DIST_EXE=%cd%\dist\BZPSP_Extractor.exe"
+set "DIST_PACKAGE_DIR=%cd%\dist\BZPSP_Extractor"
 
 if not exist "%ICON_PNG%" (
   echo ERROR: Icon source missing: %ICON_PNG%
@@ -47,6 +48,7 @@ for %%I in ("%FFPROBE_BIN_DIR%..") do set "FFPROBE_PARENT_DIR=%%~fI\"
 python -m PyInstaller ^
   --noconfirm ^
   --clean ^
+  --onefile ^
   --windowed ^
   --name BZPSP_Extractor ^
   --icon "%ICON_ICO%" ^
@@ -66,15 +68,18 @@ python -m PyInstaller ^
   app\bzpsp_gui.py
 if errorlevel 1 exit /b 1
 
-if not exist "%DIST_DIR%" (
-  echo ERROR: Expected build output not found: %DIST_DIR%
+if not exist "%DIST_EXE%" (
+  echo ERROR: Expected build output not found: %DIST_EXE%
   exit /b 1
 )
 
-copy /y "THIRD_PARTY_NOTICES.md" "%DIST_DIR%\THIRD_PARTY_NOTICES.md" >nul
-if exist "LICENSE" copy /y "LICENSE" "%DIST_DIR%\LICENSE" >nul
+if exist "%DIST_PACKAGE_DIR%" rmdir /s /q "%DIST_PACKAGE_DIR%"
+mkdir "%DIST_PACKAGE_DIR%"
+copy /y "%DIST_EXE%" "%DIST_PACKAGE_DIR%\BZPSP_Extractor.exe" >nul
+copy /y "THIRD_PARTY_NOTICES.md" "%DIST_PACKAGE_DIR%\THIRD_PARTY_NOTICES.md" >nul
+if exist "LICENSE" copy /y "LICENSE" "%DIST_PACKAGE_DIR%\LICENSE" >nul
 
-set "FFMPEG_TP_DIR=%DIST_DIR%\THIRD_PARTY\ffmpeg"
+set "FFMPEG_TP_DIR=%DIST_PACKAGE_DIR%\THIRD_PARTY\ffmpeg"
 if not exist "%FFMPEG_TP_DIR%" mkdir "%FFMPEG_TP_DIR%"
 
 set "FFMPEG_LICENSE_FOUND=0"
@@ -105,7 +110,9 @@ if "!FFMPEG_LICENSE_FOUND!"=="0" (
 )
 
 echo.
-echo Build complete. EXE is in dist\BZPSP_Extractor\
+echo Build complete.
+echo One-file EXE: dist\BZPSP_Extractor.exe
+echo Redistributable folder: dist\BZPSP_Extractor\
 echo ffmpeg bundled from: %FFMPEG_EXE%
 echo ffprobe bundled from: %FFPROBE_EXE%
 endlocal

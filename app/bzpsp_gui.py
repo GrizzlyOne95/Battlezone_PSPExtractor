@@ -285,6 +285,9 @@ class BZPSPGUI:
         style.configure(".", foreground=BZ_FG, font=normal)
         style.configure("TFrame")
         style.configure("Panel.TFrame")
+        # A frame with no drawn element lets the background image remain visible.
+        style.layout("Transparent.TFrame", [])
+        style.configure("Transparent.TFrame")
         style.configure("TLabel", foreground=BZ_FG)
         style.configure("Header.TLabel", font=(self.font_family, 16, "bold"), foreground=BZ_GREEN)
         style.configure("Sub.TLabel", foreground=BZ_MUTED)
@@ -349,10 +352,10 @@ class BZPSPGUI:
         return name
 
     def _build_ui(self) -> None:
-        wrap = ttk.Frame(self.root)
+        wrap = ttk.Frame(self.root, style="Transparent.TFrame")
         wrap.pack(fill="both", expand=True, padx=10, pady=10)
 
-        head = ttk.Frame(wrap, style="Panel.TFrame")
+        head = ttk.Frame(wrap, style="Transparent.TFrame")
         head.pack(fill="x", padx=10, pady=(8, 6))
         ttk.Label(head, text="Battlezone PSP Extractor", style="Header.TLabel").pack(side="left")
         ttk.Label(head, text="Select input + output, then run extractors", style="Sub.TLabel").pack(side="left", padx=(12, 0))
@@ -364,7 +367,7 @@ class BZPSPGUI:
 
         ttk.Label(io_frame, textvariable=self.var_usrdir_status, foreground=BZ_ACCENT).pack(anchor="w", padx=8, pady=(0, 6))
 
-        bar = ttk.Frame(wrap, style="Panel.TFrame")
+        bar = ttk.Frame(wrap, style="Transparent.TFrame")
         bar.pack(fill="x", padx=10, pady=(0, 8))
         btn_all = ttk.Button(bar, text="Run All", style="Action.TButton", command=self.run_all)
         btn_all.pack(side="left")
@@ -377,13 +380,13 @@ class BZPSPGUI:
         notebook.pack(fill="both", expand=True, padx=10, pady=(0, 8))
 
         tabs = {
-            "Textures": ttk.Frame(notebook, style="Panel.TFrame"),
-            "Geometry": ttk.Frame(notebook, style="Panel.TFrame"),
-            "Audio": ttk.Frame(notebook, style="Panel.TFrame"),
-            "Levels": ttk.Frame(notebook, style="Panel.TFrame"),
-            "Movies": ttk.Frame(notebook, style="Panel.TFrame"),
-            "Data": ttk.Frame(notebook, style="Panel.TFrame"),
-            "Fonts": ttk.Frame(notebook, style="Panel.TFrame"),
+            "Textures": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Geometry": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Audio": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Levels": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Movies": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Data": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Fonts": ttk.Frame(notebook, style="Transparent.TFrame"),
         }
         for name, frame in tabs.items():
             notebook.add(frame, text=name)
@@ -409,7 +412,7 @@ class BZPSPGUI:
         )
         self.log_text.pack(fill="both", expand=True, padx=8, pady=8)
     def _add_io_row(self, parent: ttk.Frame, label: str, var: tk.StringVar, browse_iso: bool = True) -> None:
-        row = ttk.Frame(parent)
+        row = ttk.Frame(parent, style="Transparent.TFrame")
         row.pack(fill="x", padx=8, pady=4)
         ttk.Label(row, text=label, width=16).pack(side="left")
         ttk.Entry(row, textvariable=var).pack(side="left", fill="x", expand=True)
@@ -435,7 +438,7 @@ class BZPSPGUI:
         self._add_path_info(frame, "Input: <USRDIR>/models + <USRDIR>/terrains")
         self._add_path_info(frame, "Output: <Output Root>/rws_obj")
 
-        row = ttk.Frame(frame)
+        row = ttk.Frame(frame, style="Transparent.TFrame")
         row.pack(fill="x", padx=8, pady=4)
         ttk.Label(row, text="Mode", width=16).pack(side="left")
         ttk.Combobox(
@@ -458,7 +461,7 @@ class BZPSPGUI:
         self._add_path_info(frame, "Input: <USRDIR>/audio")
         self._add_path_info(frame, "Output: <Output Root>/audio_rip")
 
-        row = ttk.Frame(frame)
+        row = ttk.Frame(frame, style="Transparent.TFrame")
         row.pack(fill="x", padx=8, pady=4)
         ttk.Label(row, text="Mode", width=16).pack(side="left")
         ttk.Combobox(
@@ -482,7 +485,7 @@ class BZPSPGUI:
         self._add_path_info(frame, "Input: <USRDIR>/leveldata")
         self._add_path_info(frame, "Output: <Output Root>/leveldata_json")
 
-        row = ttk.Frame(frame)
+        row = ttk.Frame(frame, style="Transparent.TFrame")
         row.pack(fill="x", padx=8, pady=4)
         ttk.Label(row, text="Limit", width=16).pack(side="left")
         ttk.Entry(row, textvariable=self.var_lvl_limit, width=10).pack(side="left")
@@ -497,7 +500,7 @@ class BZPSPGUI:
         self._add_path_info(frame, "Input: <USRDIR>/movie")
         self._add_path_info(frame, "Output: <Output Root>/movies")
 
-        row = ttk.Frame(frame)
+        row = ttk.Frame(frame, style="Transparent.TFrame")
         row.pack(fill="x", padx=8, pady=4)
         ttk.Label(row, text="Mode", width=16).pack(side="left")
         ttk.Combobox(
@@ -509,7 +512,7 @@ class BZPSPGUI:
         ).pack(side="left")
         ttk.Checkbutton(row, text="Overwrite MP4", variable=self.var_movie_overwrite).pack(side="left", padx=(12, 0))
 
-        row2 = ttk.Frame(frame)
+        row2 = ttk.Frame(frame, style="Transparent.TFrame")
         row2.pack(fill="x", padx=8, pady=4)
         ttk.Label(row2, text="ffmpeg", width=16).pack(side="left")
         ttk.Entry(row2, textvariable=self.var_ffmpeg, width=22).pack(side="left")

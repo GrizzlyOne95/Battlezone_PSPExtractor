@@ -57,6 +57,7 @@ def _build_pyinstaller(repo_root: Path, ffmpeg: Path, ffprobe: Path) -> None:
         "PyInstaller",
         "--noconfirm",
         "--clean",
+        "--onefile",
         "--windowed",
         "--name",
         APP_NAME,
@@ -126,8 +127,8 @@ def _collect_ffmpeg_licenses(ffmpeg: Path, ffprobe: Path, out_dir: Path) -> None
 def _find_dist_items(repo_root: Path) -> list[Path]:
     dist = repo_root / "dist"
     candidates = [
-        dist / APP_NAME,
         dist / f"{APP_NAME}.exe",
+        dist / APP_NAME,
         dist / f"{APP_NAME}.app",
     ]
     items = [p for p in candidates if p.exists()]
