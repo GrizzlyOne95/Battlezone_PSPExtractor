@@ -73,8 +73,17 @@ def _safe_name(text: str) -> str:
     return out.strip("._") or "unnamed"
 
 
+def _png_name_for_texture(tex_name: str) -> str:
+    stem = Path(tex_name).stem
+    stem = _safe_name(stem)
+    return f"{stem}.png"
+
+
 def extract_one_txd(
-    txd_path: Path, out_dir: Path, NativePSPTexture
+    txd_path: Path,
+    out_dir: Path,
+    NativePSPTexture,
+    flat_out_dir: Path | None = None,
 ) -> tuple[int, int]:
     """Extract one TXD file. Returns (ok_count, fail_count)."""
     raw = txd_path.read_bytes()
@@ -119,7 +128,13 @@ def extract_one_txd(
             rgba = tex.to_rgba(0)
             name = _safe_name(getattr(tex, "name", "") or f"tex_{tex_idx:03d}")
             out_file = out_dir / f"{tex_idx:03d}_{name}.png"
-            Image.frombytes("RGBA", (tex.width, tex.height), rgba).save(out_file)
+            image = Image.frombytes("RGBA", (tex.width, tex.height), rgba)
+            image.save(out_file)
+
+            if flat_out_dir is not None:
+                flat_file = flat_out_dir / _png_name_for_texture(name)
+                if not flat_file.exists():
+                    image.save(flat_file)
             ok += 1
         except Exception as exc:  # pragma: no cover - per-file resilience
             err_file = out_dir / f"{tex_idx:03d}_ERROR.txt"
@@ -150,6 +165,12 @@ def main() -> int:
         required=True,
         help="Output directory for extracted PNGs.",
     )
+    parser.add_argument(
+        "--flat-out-root",
+        type=Path,
+        default=None,
+        help="Optional flat output directory for texture-name PNG aliases used by OBJ/MTL.",
+    )
     args = parser.parse_args()
 
     if not args.dragonff_root.exists():
@@ -167,6 +188,8 @@ def main() -> int:
     NativePSPTexture = native_psp.NativePSPTexture
 
     args.out_root.mkdir(parents=True, exist_ok=True)
+    if args.flat_out_root is not None:
+        args.flat_out_root.mkdir(parents=True, exist_ok=True)
 
     total_ok = 0
     total_fail = 0
@@ -174,7 +197,7 @@ def main() -> int:
     for txd_file in files:
         per_out = args.out_root / txd_file.stem
         per_out.mkdir(parents=True, exist_ok=True)
-        ok, fail = extract_one_txd(txd_file, per_out, NativePSPTexture)
+        ok, fail = extract_one_txd(txd_file, per_out, NativePSPTexture, args.flat_out_root)
         total_ok += ok
         total_fail += fail
         print(f"{txd_file.name}: ok={ok} fail={fail}")

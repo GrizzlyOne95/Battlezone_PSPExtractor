@@ -64,14 +64,24 @@ def _run(cmd: list[str]) -> tuple[int, str]:
         cmd = [*cmd]
         cmd[0] = _resolve_executable(cmd[0])
     try:
+        run_kwargs: dict = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "env": _build_tool_env(),
+        }
+        if sys.platform == "win32":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            run_kwargs["startupinfo"] = startupinfo
+            run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
         proc = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env=_build_tool_env(),
+            **run_kwargs,
         )
         return proc.returncode, proc.stdout
     except FileNotFoundError:

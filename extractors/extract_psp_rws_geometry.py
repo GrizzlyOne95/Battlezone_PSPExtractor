@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import re
 import struct
 import sys
@@ -72,6 +73,27 @@ def _safe_name(text: str) -> str:
         return "unnamed"
     out = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
     return out.strip("._") or "unnamed"
+
+
+def _png_name_for_texture(tex_name: str) -> str:
+    stem = Path(tex_name).stem
+    stem = _safe_name(stem)
+    return f"{stem}.png"
+
+
+def _material_texture_map_path(
+    obj_dir: Path, texture_name: str, texture_root: Path | None
+) -> str:
+    tex_file = _png_name_for_texture(texture_name)
+    if texture_root is None:
+        return tex_file
+
+    target = texture_root / tex_file
+    try:
+        rel = os.path.relpath(target, obj_dir)
+        return Path(rel).as_posix()
+    except Exception:
+        return tex_file
 
 
 def _iter_chunks(blob: bytes, start: int, end: int) -> Iterator[ChunkInfo]:
@@ -307,6 +329,7 @@ def _write_obj_and_mtl(
     obj_path: Path,
     objects: Iterable[ObjObject],
     materials: dict[str, MaterialSpec],
+    texture_root: Path | None = None,
 ) -> None:
     obj_path.parent.mkdir(parents=True, exist_ok=True)
     mtl_path = obj_path.with_suffix(".mtl")
@@ -320,9 +343,7 @@ def _write_obj_and_mtl(
         mtl_lines.append("d 1.0")
         mtl_lines.append("illum 1")
         if spec.texture_name:
-            tex = spec.texture_name
-            if "." not in tex:
-                tex = f"{tex}.png"
+            tex = _material_texture_map_path(obj_path.parent, spec.texture_name, texture_root)
             mtl_lines.append(f"map_Kd {tex}")
         mtl_lines.append("")
 
@@ -464,7 +485,12 @@ def _parse_atomic_sector_geometry(blob: bytes, atomic_sector: ChunkInfo, world_m
     return geom
 
 
-def _extract_model_rws(rws_path: Path, out_root: Path, dffmod) -> tuple[int, int, int]:
+def _extract_model_rws(
+    rws_path: Path,
+    out_root: Path,
+    dffmod,
+    texture_root: Path | None = None,
+) -> tuple[int, int, int]:
     blob = rws_path.read_bytes()
     clumps = _find_chunks(
         blob,
@@ -521,7 +547,7 @@ def _extract_model_rws(rws_path: Path, out_root: Path, dffmod) -> tuple[int, int
                 continue
 
             obj_path = out_root / f"{rws_path.stem}_clump_{ci:03d}.obj"
-            _write_obj_and_mtl(obj_path, objects, materials)
+            _write_obj_and_mtl(obj_path, objects, materials, texture_root)
             exported += 1
             total_objects += len(objects)
         except Exception:
@@ -530,7 +556,12 @@ def _extract_model_rws(rws_path: Path, out_root: Path, dffmod) -> tuple[int, int
     return exported, total_objects, failures
 
 
-def _extract_terrain_world_rws(rws_path: Path, out_root: Path, dffmod) -> tuple[int, int, int]:
+def _extract_terrain_world_rws(
+    rws_path: Path,
+    out_root: Path,
+    dffmod,
+    texture_root: Path | None = None,
+) -> tuple[int, int, int]:
     blob = rws_path.read_bytes()
     worlds = _find_chunks(
         blob,
@@ -584,7 +615,7 @@ def _extract_terrain_world_rws(rws_path: Path, out_root: Path, dffmod) -> tuple[
                 continue
 
             obj_path = out_root / f"{rws_path.stem}_world_{wi:03d}.obj"
-            _write_obj_and_mtl(obj_path, objects, out_materials)
+            _write_obj_and_mtl(obj_path, objects, out_materials, texture_root)
             exported += 1
             total_objects += len(objects)
         except Exception:
@@ -633,6 +664,12 @@ def main() -> int:
         default=0,
         help="Optional file limit per pass (0 = no limit).",
     )
+    parser.add_argument(
+        "--texture-root",
+        type=Path,
+        default=None,
+        help="Optional flat texture root used to build relative map_Kd paths in MTL files.",
+    )
     args = parser.parse_args()
 
     if not args.dragonff_root.exists():
@@ -664,7 +701,12 @@ def main() -> int:
         for rws in model_files:
             per_out = model_out / rws.stem
             per_out.mkdir(parents=True, exist_ok=True)
-            exported, objects, failures = _extract_model_rws(rws, per_out, dffmod)
+            exported, objects, failures = _extract_model_rws(
+                rws,
+                per_out,
+                dffmod,
+                args.texture_root,
+            )
             total_exported += exported
             total_objects += objects
             total_failures += failures
@@ -682,7 +724,12 @@ def main() -> int:
         for rws in terrain_files:
             per_out = terrain_out / rws.stem
             per_out.mkdir(parents=True, exist_ok=True)
-            exported, objects, failures = _extract_terrain_world_rws(rws, per_out, dffmod)
+            exported, objects, failures = _extract_terrain_world_rws(
+                rws,
+                per_out,
+                dffmod,
+                args.texture_root,
+            )
             total_exported += exported
             total_objects += objects
             total_failures += failures

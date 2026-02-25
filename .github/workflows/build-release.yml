@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest]
 
     steps:
       - name: Checkout
@@ -34,18 +34,6 @@ jobs:
         shell: powershell
         run: |
           choco install ffmpeg -y --no-progress
-
-      - name: Install FFmpeg (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: Install FFmpeg (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew update
-          brew install ffmpeg
 
       - name: Install Python dependencies
         run: |

@@ -23,7 +23,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from pathlib import Path, PurePosixPath
 from tkinter import filedialog, messagebox, ttk
-from typing import Callable
+from typing import Any, Callable
 
 try:
     from PIL import Image, ImageTk
@@ -32,6 +32,7 @@ except Exception:
     ImageTk = None  # type: ignore[assignment]
 
 BZ_BG = "#0b0f0b"
+BZ_PANEL = "#101710"
 BZ_FG = "#d7e0d7"
 BZ_GREEN = "#5cff72"
 BZ_ACCENT = "#00d9ff"
@@ -154,6 +155,7 @@ class BZPSPGUI:
         self._build_vars()
         self._build_ui()
         self._apply_config()
+        self._sanitize_movie_tool_vars()
         self._recompute_paths()
         self._drain_log_queue()
 
@@ -282,26 +284,31 @@ class BZPSPGUI:
         normal = (self.font_family, 10)
         bold = (self.font_family, 11, "bold")
 
-        style.configure(".", foreground=BZ_FG, font=normal)
-        style.configure("TFrame")
-        style.configure("Panel.TFrame")
-        # A frame with no drawn element lets the background image remain visible.
+        style.configure(".", background=BZ_BG, foreground=BZ_FG, font=normal)
+        style.configure("TFrame", background=BZ_BG)
+        style.configure("Panel.TFrame", background=BZ_PANEL)
         style.layout("Transparent.TFrame", [])
-        style.configure("Transparent.TFrame")
-        style.configure("TLabel", foreground=BZ_FG)
+        style.configure("Transparent.TFrame", background=BZ_BG)
+        style.configure("TLabel", background=BZ_BG, foreground=BZ_FG)
         style.configure("Header.TLabel", font=(self.font_family, 16, "bold"), foreground=BZ_GREEN)
-        style.configure("Sub.TLabel", foreground=BZ_MUTED)
-        style.configure("TLabelframe", foreground=BZ_ACCENT)
-        style.configure("TLabelframe.Label", foreground=BZ_ACCENT, font=bold)
+        style.configure("Sub.TLabel", background=BZ_BG, foreground="#b2c0b2")
+        style.configure("TLabelframe", background=BZ_PANEL, foreground=BZ_ACCENT)
+        style.configure("TLabelframe.Label", background=BZ_PANEL, foreground=BZ_ACCENT, font=bold)
         style.configure("TEntry", fieldbackground="#172217", foreground=BZ_ACCENT)
         style.configure("TButton", background=BZ_DARK, foreground=BZ_FG)
         style.map("TButton", background=[("active", "#1d2a1d")], foreground=[("active", BZ_GREEN)])
+        style.configure("TCheckbutton", background=BZ_PANEL, foreground=BZ_FG)
+        style.map(
+            "TCheckbutton",
+            foreground=[("disabled", "#7f8e7f"), ("active", BZ_GREEN)],
+            background=[("active", BZ_PANEL)],
+        )
         style.configure("Action.TButton", foreground=BZ_GREEN, font=bold)
         style.configure("Warn.TButton", foreground="#ffb347")
-        style.configure("TNotebook", background=BZ_BG, borderwidth=0)
+        style.configure("TNotebook", background=BZ_PANEL, borderwidth=0)
         style.configure("TNotebook.Tab", background="#132013", foreground=BZ_FG, padding=[10, 4])
         style.map("TNotebook.Tab", background=[("selected", "#1f311f")], foreground=[("selected", BZ_GREEN)])
-        style.configure("TCombobox", fieldbackground="#172217", foreground=BZ_ACCENT)
+        style.configure("TCombobox", fieldbackground="#172217", foreground=BZ_ACCENT, background="#172217")
 
     def _build_vars(self) -> None:
         self.var_input_root = tk.StringVar(value="")
@@ -333,6 +340,9 @@ class BZPSPGUI:
         if sys.platform == "win32" and not name.lower().endswith(".exe"):
             names.insert(0, f"{name}.exe")
 
+        if self._is_frozen():
+            return names[0]
+
         candidates: list[Path] = []
         meipass = getattr(sys, "_MEIPASS", None)
         if isinstance(meipass, str) and meipass:
@@ -350,6 +360,22 @@ class BZPSPGUI:
             if cand.exists() and cand.is_file():
                 return str(cand)
         return name
+
+    def _sanitize_movie_tool_vars(self) -> None:
+        for var, base in ((self.var_ffmpeg, "ffmpeg"), (self.var_ffprobe, "ffprobe")):
+            raw = var.get().strip()
+            default_name = f"{base}.exe" if sys.platform == "win32" else base
+            if not raw:
+                var.set(self._find_tool_executable(base))
+                continue
+
+            p = Path(raw)
+            if self._is_frozen() and p.is_absolute():
+                var.set(default_name)
+                continue
+
+            if p.is_absolute() and not p.exists():
+                var.set(self._find_tool_executable(base))
 
     def _movie_tool_arg(self, raw_value: str, fallback: str) -> str:
         value = raw_value.strip() or fallback
@@ -403,8 +429,9 @@ class BZPSPGUI:
         btn_stop.pack(side="left", padx=(8, 0))
         ttk.Label(bar, textvariable=self.var_status, foreground=BZ_ACCENT).pack(side="right")
 
-        notebook = ttk.Notebook(wrap)
-        notebook.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+        # Keep tab area compact so empty space is not filled by dark notebook/page backgrounds.
+        notebook = ttk.Notebook(wrap, height=250)
+        notebook.pack(fill="x", expand=False, padx=10, pady=(0, 8))
 
         tabs = {
             "Textures": ttk.Frame(notebook, style="Transparent.TFrame"),
@@ -455,6 +482,7 @@ class BZPSPGUI:
         frame.pack(fill="x", padx=10, pady=10)
         self._add_path_info(frame, "Input: <USRDIR>/textures")
         self._add_path_info(frame, "Output: <Output Root>/textures_png")
+        self._add_path_info(frame, "Flat textures: <Output Root>/textures_png_flat (for OBJ/MTL imports)")
         btn = ttk.Button(frame, text="Run Texture Extract", style="Action.TButton", command=self.run_textures)
         btn.pack(anchor="w", padx=8, pady=8)
         self.run_buttons.append(btn)
@@ -464,6 +492,7 @@ class BZPSPGUI:
         frame.pack(fill="x", padx=10, pady=10)
         self._add_path_info(frame, "Input: <USRDIR>/models + <USRDIR>/terrains")
         self._add_path_info(frame, "Output: <Output Root>/rws_obj")
+        self._add_path_info(frame, "MTL textures: relative links to <Output Root>/textures_png_flat")
 
         row = ttk.Frame(frame, style="Transparent.TFrame")
         row.pack(fill="x", padx=8, pady=4)
@@ -665,7 +694,6 @@ class BZPSPGUI:
         cache_usrdir.mkdir(parents=True, exist_ok=True)
 
         self._log(f"Preparing ISO input: {iso_file}")
-        self.var_status.set("Extracting ISO...")
         try:
             self._extract_usrdir_from_iso(iso_file, cache_usrdir)
             marker.parent.mkdir(parents=True, exist_ok=True)
@@ -675,11 +703,9 @@ class BZPSPGUI:
         except Exception as exc:
             shutil.rmtree(cache_root, ignore_errors=True)
             return None, f"ISO extraction failed: {exc}"
-        finally:
-            self.var_status.set("Idle")
 
-    def _set_paths_from_usrdir(self, usrdir: Path, out_root: Path) -> None:
-        self.paths = {
+    def _make_paths(self, usrdir: Path, out_root: Path) -> dict[str, Path]:
+        return {
             "usrdir": usrdir,
             "txd_root": usrdir / "textures",
             "models_root": usrdir / "models",
@@ -692,6 +718,7 @@ class BZPSPGUI:
             "data_menu_root": usrdir / "menu",
             "font_root": usrdir / "font",
             "txd_out": out_root / "textures_png",
+            "txd_flat_out": out_root / "textures_png_flat",
             "geo_out": out_root / "rws_obj",
             "audio_out": out_root / "audio_rip",
             "lvl_out": out_root / "leveldata_json",
@@ -699,6 +726,16 @@ class BZPSPGUI:
             "data_out": out_root / "data_tables_json",
             "font_out": out_root / "font_metrics_json",
         }
+
+    def _set_paths_from_usrdir(self, usrdir: Path, out_root: Path) -> None:
+        self.paths = self._make_paths(usrdir, out_root)
+
+    def _paths_for_opts(self, opts: dict[str, Any] | None) -> dict[str, Path]:
+        if opts:
+            from_opts = opts.get("paths")
+            if isinstance(from_opts, dict) and from_opts:
+                return from_opts  # type: ignore[return-value]
+        return self.paths
 
     def _recompute_paths(self) -> None:
         input_text = self.var_input_root.get().strip()
@@ -825,6 +862,9 @@ class BZPSPGUI:
             btn.configure(state=state)
         self.var_status.set(status if status else ("Running" if running else "Idle"))
 
+    def _set_status_async(self, status: str) -> None:
+        self.root.after(0, lambda: self.var_status.set(status))
+
     def _extractor_script(self, name: str) -> Path:
         cand = self.extractors_root / name
         if cand.exists():
@@ -847,15 +887,13 @@ class BZPSPGUI:
             return [*base, "--run-extractor", extractor_script, *args]
         return [*base, str(self._extractor_script(extractor_script)), *args]
 
-    def _ensure_ready(self) -> bool:
-        self._recompute_paths()
-
-        input_text = self.var_input_root.get().strip()
+    def _ensure_ready(self, opts: dict[str, Any]) -> bool:
+        input_text = str(opts.get("input_root", "")).strip()
         if not input_text:
             messagebox.showerror("Missing Input", "Select an input path first.")
             return False
 
-        out_text = self.var_output_root.get().strip()
+        out_text = str(opts.get("output_root", "")).strip()
         if not out_text:
             messagebox.showerror("Missing Output", "Select an output root first.")
             return False
@@ -866,14 +904,18 @@ class BZPSPGUI:
             messagebox.showerror("Invalid Output", f"Output root is not a directory:\n{out_root}")
             return False
 
-        if in_path.is_file() and in_path.suffix.lower() == ".iso":
-            usrdir, err = self._prepare_iso_usrdir(in_path, out_root)
+        if not (in_path.is_file() and in_path.suffix.lower() == ".iso"):
+            usrdir, err = self._resolve_usrdir(in_path)
             if usrdir is None:
-                messagebox.showerror("ISO Error", err or "Failed to prepare ISO input.")
+                messagebox.showerror("Invalid Input", f"Could not resolve USRDIR: {err}")
                 return False
             self._set_paths_from_usrdir(usrdir, out_root)
             self.var_usrdir_status.set(f"USRDIR: {usrdir}")
         elif not self.paths.get("usrdir"):
+            # ISO mode gets prepared on worker thread.
+            self.var_usrdir_status.set("USRDIR: ISO selected (preparing on run)")
+
+        if not self.paths.get("usrdir") and not (in_path.is_file() and in_path.suffix.lower() == ".iso"):
             messagebox.showerror("Invalid Input", "Could not resolve USRDIR from input path.")
             return False
 
@@ -903,96 +945,114 @@ class BZPSPGUI:
                 return False
         return True
 
-    def _build_textures_cmd(self) -> list[str]:
+    def _build_textures_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
         return self._build_extractor_cmd(
             "extract_psp_txd_textures.py",
             [
             "--dragonff-root", str(self.vendor_dragonff),
-            "--txd-root", str(self.paths["txd_root"]),
-            "--out-root", str(self.paths["txd_out"]),
+            "--txd-root", str(paths["txd_root"]),
+            "--out-root", str(paths["txd_out"]),
+            "--flat-out-root", str(paths["txd_flat_out"]),
             ],
         )
 
-    def _build_geometry_cmd(self) -> list[str]:
+    def _build_geometry_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
+        mode = str((opts or {}).get("geo_mode", self.var_geo_mode.get())).strip() or "all"
         cmd = self._build_extractor_cmd(
             "extract_psp_rws_geometry.py",
             [
             "--dragonff-root", str(self.vendor_dragonff),
-            "--models-root", str(self.paths["models_root"]),
-            "--terrains-root", str(self.paths["terrains_root"]),
-            "--out-root", str(self.paths["geo_out"]),
-            "--mode", self.var_geo_mode.get().strip() or "all",
+            "--models-root", str(paths["models_root"]),
+            "--terrains-root", str(paths["terrains_root"]),
+            "--out-root", str(paths["geo_out"]),
+            "--mode", mode,
+            "--texture-root", str(paths["txd_flat_out"]),
             ],
         )
         try:
-            limit = int((self.var_geo_limit.get() or "0").strip())
+            raw_limit = str((opts or {}).get("geo_limit", self.var_geo_limit.get()) or "0").strip()
+            limit = int(raw_limit)
         except ValueError:
             limit = 0
         if limit > 0:
             cmd.extend(["--limit", str(limit)])
         return cmd
 
-    def _build_audio_cmd(self) -> list[str]:
+    def _build_audio_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
+        mode = str((opts or {}).get("audio_mode", self.var_audio_mode.get())).strip() or "all"
         cmd = self._build_extractor_cmd(
             "extract_psp_audio.py",
             [
-            "--audio-root", str(self.paths["audio_root"]),
-            "--out-root", str(self.paths["audio_out"]),
-            "--mode", self.var_audio_mode.get().strip() or "all",
+            "--audio-root", str(paths["audio_root"]),
+            "--out-root", str(paths["audio_out"]),
+            "--mode", mode,
             ],
         )
-        if not self.var_audio_decode_vag.get():
+        decode_vag = bool((opts or {}).get("audio_decode_vag", self.var_audio_decode_vag.get()))
+        if not decode_vag:
             cmd.append("--no-decode-vag")
         return cmd
 
-    def _build_lvl_cmd(self) -> list[str]:
+    def _build_lvl_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
         cmd = self._build_extractor_cmd(
             "extract_psp_lvl_json.py",
             [
-            "--lvl-root", str(self.paths["lvl_root"]),
-            "--out-root", str(self.paths["lvl_out"]),
+            "--lvl-root", str(paths["lvl_root"]),
+            "--out-root", str(paths["lvl_out"]),
             ],
         )
         try:
-            limit = int((self.var_lvl_limit.get() or "0").strip())
+            raw_limit = str((opts or {}).get("lvl_limit", self.var_lvl_limit.get()) or "0").strip()
+            limit = int(raw_limit)
         except ValueError:
             limit = 0
         if limit > 0:
             cmd.extend(["--limit", str(limit)])
         return cmd
 
-    def _build_movies_cmd(self) -> list[str]:
+    def _build_movies_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
+        mode = str((opts or {}).get("movie_mode", self.var_movie_mode.get())).strip() or "all"
+        ffmpeg = str((opts or {}).get("ffmpeg", self.var_ffmpeg.get()))
+        ffprobe = str((opts or {}).get("ffprobe", self.var_ffprobe.get()))
         cmd = self._build_extractor_cmd(
             "extract_psp_movies.py",
             [
-            "--movie-root", str(self.paths["movie_root"]),
-            "--out-root", str(self.paths["movie_out"]),
-            "--mode", self.var_movie_mode.get().strip() or "all",
-            "--ffmpeg", self._movie_tool_arg(self.var_ffmpeg.get(), "ffmpeg"),
-            "--ffprobe", self._movie_tool_arg(self.var_ffprobe.get(), "ffprobe"),
+            "--movie-root", str(paths["movie_root"]),
+            "--out-root", str(paths["movie_out"]),
+            "--mode", mode,
+            "--ffmpeg", self._movie_tool_arg(ffmpeg, "ffmpeg"),
+            "--ffprobe", self._movie_tool_arg(ffprobe, "ffprobe"),
             ],
         )
-        if self.var_movie_overwrite.get():
+        overwrite = bool((opts or {}).get("movie_overwrite", self.var_movie_overwrite.get()))
+        if overwrite:
             cmd.append("--overwrite")
         return cmd
 
-    def _build_data_cmd(self) -> list[str]:
+    def _build_data_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
         return self._build_extractor_cmd(
             "extract_psp_data_tables.py",
             [
-            "--leveldata-root", str(self.paths["data_leveldata_root"]),
-            "--text-root", str(self.paths["data_text_root"]),
-            "--menu-root", str(self.paths["data_menu_root"]),
-            "--out-root", str(self.paths["data_out"]),
+            "--leveldata-root", str(paths["data_leveldata_root"]),
+            "--text-root", str(paths["data_text_root"]),
+            "--menu-root", str(paths["data_menu_root"]),
+            "--out-root", str(paths["data_out"]),
             ],
         )
 
-    def _build_font_cmd(self) -> list[str]:
+    def _build_font_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
         return self._build_extractor_cmd(
             "extract_psp_font_metrics.py",
             [
-            "--font-root", str(self.paths["font_root"]),
-            "--out-root", str(self.paths["font_out"]),
+            "--font-root", str(paths["font_root"]),
+            "--out-root", str(paths["font_out"]),
             ],
         )
     def run_textures(self) -> None:
@@ -1029,32 +1089,121 @@ class BZPSPGUI:
             ]
         )
 
-    def _start_pipeline(self, steps: list[tuple[str, Callable[[], list[str]]]]) -> None:
+    def _snapshot_run_options(self) -> dict[str, Any]:
+        return {
+            "input_root": self.var_input_root.get().strip(),
+            "output_root": self.var_output_root.get().strip(),
+            "geo_mode": self.var_geo_mode.get().strip(),
+            "geo_limit": self.var_geo_limit.get().strip(),
+            "audio_mode": self.var_audio_mode.get().strip(),
+            "audio_decode_vag": bool(self.var_audio_decode_vag.get()),
+            "lvl_limit": self.var_lvl_limit.get().strip(),
+            "movie_mode": self.var_movie_mode.get().strip(),
+            "movie_overwrite": bool(self.var_movie_overwrite.get()),
+            "ffmpeg": self.var_ffmpeg.get().strip(),
+            "ffprobe": self.var_ffprobe.get().strip(),
+        }
+
+    def _prepare_worker_paths(self, opts: dict[str, Any]) -> dict[str, Path] | None:
+        in_path = Path(str(opts.get("input_root", "")).strip())
+        out_root = Path(str(opts.get("output_root", "")).strip())
+        if in_path.is_file() and in_path.suffix.lower() == ".iso":
+            self._log("Preparing ISO for extraction...")
+            self._set_status_async("Preparing ISO")
+            usrdir, err = self._prepare_iso_usrdir(in_path, out_root)
+            if usrdir is None:
+                self._log(f"ISO preparation failed: {err}")
+                return None
+            paths = self._make_paths(usrdir, out_root)
+            self._log(f"Resolved USRDIR: {usrdir}")
+            self._log(f"Output root: {out_root}")
+            self.root.after(0, lambda p=paths: setattr(self, "paths", dict(p)))
+            self.root.after(0, lambda p=str(usrdir): self.var_usrdir_status.set(f"USRDIR: {p}"))
+            self.root.after(0, lambda p=usrdir: _load_windows_font(p / "font" / "FFFEstudioExtended.ttf"))
+            return paths
+
+        usrdir, err = self._resolve_usrdir(in_path)
+        if usrdir is None:
+            self._log(f"Input resolution failed: {err}")
+            return None
+        paths = self._make_paths(usrdir, out_root)
+        self._log(f"Resolved USRDIR: {usrdir}")
+        self._log(f"Output root: {out_root}")
+        self.root.after(0, lambda p=paths: setattr(self, "paths", dict(p)))
+        self.root.after(0, lambda p=str(usrdir): self.var_usrdir_status.set(f"USRDIR: {p}"))
+        self.root.after(0, lambda p=usrdir: _load_windows_font(p / "font" / "FFFEstudioExtended.ttf"))
+        return paths
+
+    def _validate_cmd_worker(self, cmd: list[str]) -> bool:
+        if len(cmd) < 2:
+            self._log("Invalid command (too short).")
+            return False
+        py = Path(cmd[0]).resolve()
+        if not py.exists():
+            self._log(f"Python runtime not found: {py}")
+            return False
+        if len(cmd) >= 3 and cmd[1] == "--run-extractor":
+            try:
+                _load_embedded_extractor_module(cmd[2])
+            except Exception as exc:
+                self._log(f"Extractor validation failed: {exc}")
+                return False
+        else:
+            script = Path(cmd[1])
+            if not script.exists():
+                self._log(f"Script not found: {script}")
+                return False
+        return True
+
+    def _start_pipeline(self, steps: list[tuple[str, Callable[[dict[str, Any] | None], list[str]]]]) -> None:
         if self.worker and self.worker.is_alive():
             messagebox.showwarning("Busy", "A task is already running.")
             return
 
-        if not self._ensure_ready():
+        opts = self._snapshot_run_options()
+        if not self._ensure_ready(opts):
             return
-
-        resolved_steps = [(name, builder()) for name, builder in steps]
-        for _, cmd in resolved_steps:
-            if not self._validate_cmd(cmd):
-                return
 
         self._save_config()
         self.stop_event.clear()
-        self._set_running(True, "Running")
-        self.worker = threading.Thread(target=self._worker_run_steps, args=(resolved_steps,), daemon=True)
+        self._set_running(True, "Preparing")
+        self.worker = threading.Thread(target=self._worker_prepare_and_run, args=(steps, opts), daemon=True)
         self.worker.start()
 
-    def _worker_run_steps(self, steps: list[tuple[str, list[str]]]) -> None:
+    def _worker_prepare_and_run(
+        self,
+        steps: list[tuple[str, Callable[[dict[str, Any] | None], list[str]]]],
+        opts: dict[str, Any],
+    ) -> None:
+        self._log("Preparing run context...")
+        run_paths = self._prepare_worker_paths(opts)
+        if not run_paths:
+            self.root.after(0, lambda: self._set_running(False, "Failed"))
+            return
+
+        run_opts = dict(opts)
+        run_opts["paths"] = run_paths
+        self._set_status_async("Preparing commands")
+        resolved_steps: list[tuple[str, list[str]]] = []
+        for name, builder in steps:
+            self._log(f"[{name}] building command...")
+            cmd = builder(run_opts)
+            if not self._validate_cmd_worker(cmd):
+                self.root.after(0, lambda: self._set_running(False, "Failed"))
+                return
+            resolved_steps.append((name, cmd))
+
+        self._worker_run_cmd_steps(resolved_steps)
+
+    def _worker_run_cmd_steps(self, steps: list[tuple[str, list[str]]]) -> None:
         ok = True
         for name, cmd in steps:
             if self.stop_event.is_set():
                 ok = False
                 break
+            self._set_status_async(f"Running: {name}")
             self._log(f"\n=== {name} ===")
+            self._log(f"[{name}] starting...")
             self._log("$ " + shlex.join(cmd))
             code = self._run_subprocess(cmd)
             if code != 0:
@@ -1077,15 +1226,25 @@ class BZPSPGUI:
     def _run_subprocess(self, cmd: list[str]) -> int:
         run_cwd = self.repo_root if self.repo_root.exists() else Path.cwd()
         try:
+            popen_kwargs: dict = {
+                "cwd": str(run_cwd),
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+                "encoding": "utf-8",
+                "errors": "replace",
+                "bufsize": 1,
+            }
+            if sys.platform == "win32":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0
+                popen_kwargs["startupinfo"] = startupinfo
+                popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
             proc = subprocess.Popen(
                 cmd,
-                cwd=str(run_cwd),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
+                **popen_kwargs,
             )
         except Exception as exc:
             self._log(f"Launch failed: {exc}")
