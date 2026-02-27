@@ -1,3 +1,6 @@
+
+![hqdefault (1)](https://github.com/user-attachments/assets/29fe1a28-9eaa-4ac9-af67-afefacee60da)
+
 # BZ PSP Extractor
 
 Standalone GUI front-end for Battlezone PSP extraction workflows.
