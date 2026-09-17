@@ -4,10 +4,13 @@ cd /d "%~dp0"
 
 set "ICON_PNG=%cd%\038_PU_Ammo_big.png"
 set "ICON_ICO=%cd%\build\bzpsp_icon.ico"
+set "VERSION_INFO=%cd%\branding\version_info.txt"
+set "APP_VERSION=0.0.0"
+if defined BZPSP_VERSION set "APP_VERSION=%BZPSP_VERSION%"
 set "FFMPEG_EXE="
 set "FFPROBE_EXE="
-set "DIST_EXE=%cd%\dist\BZPSP_Extractor.exe"
-set "DIST_PACKAGE_DIR=%cd%\dist\BZPSP_Extractor"
+set "DIST_EXE=%cd%\dist\BZPSPExtractor.exe"
+set "DIST_PACKAGE_DIR=%cd%\dist\BZPSPExtractor"
 
 if not exist "%ICON_PNG%" (
   echo ERROR: Icon source missing: %ICON_PNG%
@@ -23,6 +26,12 @@ if not exist build mkdir build
 python -c "from PIL import Image; Image.open(r'%ICON_PNG%').save(r'%ICON_ICO%', format='ICO', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])"
 if errorlevel 1 (
   echo ERROR: Failed to generate ICO from %ICON_PNG%
+  exit /b 1
+)
+
+python scripts\generate_version_info.py --version "%APP_VERSION%" --output "%VERSION_INFO%"
+if errorlevel 1 (
+  echo ERROR: Failed to generate Windows version metadata.
   exit /b 1
 )
 
@@ -50,8 +59,9 @@ python -m PyInstaller ^
   --clean ^
   --onefile ^
   --windowed ^
-  --name BZPSP_Extractor ^
+  --name BZPSPExtractor ^
   --icon "%ICON_ICO%" ^
+  --version-file "%VERSION_INFO%" ^
   --hidden-import extractors.extract_psp_txd_textures ^
   --hidden-import extractors.extract_psp_rws_geometry ^
   --hidden-import extractors.extract_psp_audio ^
@@ -75,7 +85,7 @@ if not exist "%DIST_EXE%" (
 
 if exist "%DIST_PACKAGE_DIR%" rmdir /s /q "%DIST_PACKAGE_DIR%"
 mkdir "%DIST_PACKAGE_DIR%"
-copy /y "%DIST_EXE%" "%DIST_PACKAGE_DIR%\BZPSP_Extractor.exe" >nul
+copy /y "%DIST_EXE%" "%DIST_PACKAGE_DIR%\BZPSPExtractor.exe" >nul
 copy /y "THIRD_PARTY_NOTICES.md" "%DIST_PACKAGE_DIR%\THIRD_PARTY_NOTICES.md" >nul
 if exist "LICENSE" copy /y "LICENSE" "%DIST_PACKAGE_DIR%\LICENSE" >nul
 
@@ -111,8 +121,9 @@ if "!FFMPEG_LICENSE_FOUND!"=="0" (
 
 echo.
 echo Build complete.
-echo One-file EXE: dist\BZPSP_Extractor.exe
-echo Redistributable folder: dist\BZPSP_Extractor\
+echo One-file EXE: dist\BZPSPExtractor.exe
+echo Redistributable folder: dist\BZPSPExtractor\
+echo Windows metadata version: %APP_VERSION%
 echo ffmpeg bundled from: %FFMPEG_EXE%
 echo ffprobe bundled from: %FFPROBE_EXE%
 endlocal
