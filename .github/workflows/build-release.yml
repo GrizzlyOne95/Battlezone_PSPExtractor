@@ -6,10 +6,17 @@ on:
       - main
     tags:
       - "v*"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: write
+
+env:
+  PACKAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'ci' }}
+  WINDOWS_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.0.0' }}
 
 jobs:
   build:
@@ -40,16 +47,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-build.txt
 
+      - name: Verify Python sources
+        run: python -m compileall app extractors scripts
+
       - name: Build package
         run: |
-          python scripts/build_ci.py --platform "${{ runner.os }}"
+          python scripts/build_ci.py --platform "${{ runner.os }}" --version "${{ env.WINDOWS_VERSION }}" --package-version "${{ env.PACKAGE_VERSION }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BZPSP_Extractor-${{ runner.os }}
-          path: release/*.zip
+          name: Battlezone_PSPExtractor-${{ runner.os }}
+          path: release/Battlezone_PSPExtractor-*.zip
           if-no-files-found: error
+          retention-days: 7
 
   release:
     name: Create Release
@@ -68,4 +79,4 @@ jobs:
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: artifacts/**/*.zip
+          files: artifacts/**/Battlezone_PSPExtractor-v*-windows.zip
