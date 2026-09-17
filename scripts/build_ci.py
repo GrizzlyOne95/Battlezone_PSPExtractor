@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Cross-platform CI build helper for BZPSP_Extractor.
+Cross-platform CI build helper for Battlezone PSP Extractor.
 
-Builds a PyInstaller package and produces a zip in ./release.
+Builds a PyInstaller package and produces a versioned zip in ./release.
 """
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ import zipfile
 from pathlib import Path
 
 
-APP_NAME = "BZPSP_Extractor"
+APP_NAME = "BZPSPExtractor"
+ARCHIVE_PREFIX = "Battlezone_PSPExtractor"
 HIDDEN_IMPORTS = [
     "extractors.extract_psp_txd_textures",
     "extractors.extract_psp_rws_geometry",
@@ -50,7 +51,7 @@ def _find_binary(name: str) -> Path:
     raise RuntimeError(f"Required binary not found in PATH: {name}")
 
 
-def _build_pyinstaller(repo_root: Path, ffmpeg: Path, ffprobe: Path) -> None:
+def _build_pyinstaller(repo_root: Path, ffmpeg: Path, ffprobe: Path, version: str) -> None:
     cmd = [
         sys.executable,
         "-m",
@@ -77,6 +78,21 @@ def _build_pyinstaller(repo_root: Path, ffmpeg: Path, ffprobe: Path) -> None:
             sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)],
         )
         cmd.extend(["--icon", str(icon_ico)])
+
+        version_info = repo_root / "branding" / "version_info.txt"
+        subprocess.run(
+            [
+                sys.executable,
+                str(repo_root / "scripts" / "generate_version_info.py"),
+                "--version",
+                version,
+                "--output",
+                str(version_info),
+            ],
+            cwd=repo_root,
+            check=True,
+        )
+        cmd.extend(["--version-file", str(version_info)])
 
     for module in HIDDEN_IMPORTS:
         cmd.extend(["--hidden-import", module])
@@ -138,7 +154,13 @@ def _find_dist_items(repo_root: Path) -> list[Path]:
     raise RuntimeError(f"No build output found under: {dist}")
 
 
-def _stage_and_zip(repo_root: Path, platform_tag: str, ffmpeg: Path, ffprobe: Path) -> Path:
+def _stage_and_zip(
+    repo_root: Path,
+    platform_tag: str,
+    package_version: str,
+    ffmpeg: Path,
+    ffprobe: Path,
+) -> Path:
     release_root = repo_root / "release"
     release_root.mkdir(parents=True, exist_ok=True)
 
@@ -161,7 +183,7 @@ def _stage_and_zip(repo_root: Path, platform_tag: str, ffmpeg: Path, ffprobe: Pa
 
     _collect_ffmpeg_licenses(ffmpeg, ffprobe, stage_dir)
 
-    zip_path = release_root / f"{stage_dir.name}.zip"
+    zip_path = release_root / f"{ARCHIVE_PREFIX}-{package_version}-{platform_tag}.zip"
     if zip_path.exists():
         zip_path.unlink()
 
@@ -185,11 +207,21 @@ def _normalize_platform(raw: str) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build release package for CI.")
+    parser = argparse.ArgumentParser(description="Build release package for Battlezone PSP Extractor.")
     parser.add_argument(
         "--platform",
         default=os.environ.get("RUNNER_OS", os.name),
         help="Platform label for archive naming.",
+    )
+    parser.add_argument(
+        "--version",
+        default=os.environ.get("BZPSP_VERSION", "0.0.0"),
+        help="Application version used for Windows file metadata.",
+    )
+    parser.add_argument(
+        "--package-version",
+        default=os.environ.get("BZPSP_PACKAGE_VERSION", "ci"),
+        help="Version token used in the release archive name.",
     )
     args = parser.parse_args()
 
@@ -197,12 +229,17 @@ def main() -> int:
     ffmpeg = _find_binary("ffmpeg")
     ffprobe = _find_binary("ffprobe")
 
-    _build_pyinstaller(repo_root, ffmpeg, ffprobe)
-    zip_path = _stage_and_zip(repo_root, _normalize_platform(args.platform), ffmpeg, ffprobe)
+    _build_pyinstaller(repo_root, ffmpeg, ffprobe, args.version)
+    zip_path = _stage_and_zip(
+        repo_root,
+        _normalize_platform(args.platform),
+        args.package_version,
+        ffmpeg,
+        ffprobe,
+    )
     print(f"Created archive: {zip_path}")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

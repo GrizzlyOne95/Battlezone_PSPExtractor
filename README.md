@@ -1,12 +1,10 @@
-
 ![hqdefault (1)](https://github.com/user-attachments/assets/29fe1a28-9eaa-4ac9-af67-afefacee60da)
 
-# BZ PSP Extractor
+# Battlezone PSP Extractor
 
 Standalone GUI front-end for Battlezone PSP extraction workflows.
 
-<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/06d9034a-d956-4ef4-9f1f-7566d31a962a" />
-
+<img width="1920" height="1032" alt="Battlezone PSP Extractor" src="https://github.com/user-attachments/assets/06d9034a-d956-4ef4-9f1f-7566d31a962a" />
 
 This app wraps the extraction scripts in `extractors`:
 - `extract_psp_txd_textures.py`
@@ -39,45 +37,72 @@ Runtime/build dependencies:
 
 ## Run
 ```powershell
-cd <path-to-repo>\BZPSP_Extractor
+cd <path-to-repo>\Battlezone_PSPExtractor
 python app\bzpsp_gui.py
 ```
 
+## Release Builds
+
+The public Windows executable has a stable, versionless name:
+
+- `BZPSPExtractor.exe`
+
+Release archives carry the version and platform, for example:
+
+- `Battlezone_PSPExtractor-v0.1.2-windows.zip`
+
+Official Windows releases use the shared Battlezone tool-suite metadata:
+
+```text
+FileDescription: Battlezone PSP Extractor
+ProductName: Battlezone Modding Tools
+CompanyName: GrizzlyOne95
+OriginalFilename: BZPSPExtractor.exe
+```
+
+`FileVersion` and `ProductVersion` are derived from the release tag. Non-release CI/local builds use neutral `0.0.0` metadata unless `BZPSP_VERSION` is set for the local build.
+
 ## Build Standalone EXE (Windows)
 ```powershell
-cd <path-to-repo>\BZPSP_Extractor
+cd <path-to-repo>\Battlezone_PSPExtractor
 build_exe.bat
 ```
 
 Output folder:
-- One-file EXE: `dist\BZPSP_Extractor.exe`
-- Redistributable folder with notices/licenses: `dist\BZPSP_Extractor\`
+- One-file EXE: `dist\BZPSPExtractor.exe`
+- Redistributable folder with notices/licenses: `dist\BZPSPExtractor\`
 
 Build behavior:
-- Uses `038_PU_Ammo_big.png` as the EXE icon (converted to `.ico` during build)
-- Uses PyInstaller `--onefile` (no required `_internal` folder at runtime)
-- Auto-bundles `ffmpeg.exe` and `ffprobe.exe` into the executable
-  - Looks first in repo root, then in system `PATH`
-  - Build fails if either executable is missing
-- Copies project and third-party notices into the build output
+- Uses `038_PU_Ammo_big.png` as the EXE icon (converted to `.ico` during build).
+- Uses PyInstaller `--onefile` (no required `_internal` folder at runtime).
+- Adds Windows file/product version metadata.
+- Auto-bundles `ffmpeg.exe` and `ffprobe.exe` into the executable.
+  - Looks first in repo root, then in system `PATH`.
+  - Build fails if either executable is missing.
+- Copies project and third-party notices into the redistributable folder.
 
-## GitHub Actions (Cross-Platform)
+To stamp a local build with a version instead of `0.0.0`:
+
+```powershell
+$env:BZPSP_VERSION = "0.1.2"
+build_exe.bat
+```
+
+## GitHub Actions
 Workflow file: `.github/workflows/build-release.yml`
 
-What it does:
-- Builds packaged app artifacts on:
-  - Windows
-  - macOS
-  - Linux
-- Uses PyInstaller `--onefile` builds
-- Bundles FFmpeg binaries found on each runner
-- Uploads zipped build artifacts
-- On tag pushes matching `v*`, creates a GitHub Release and attaches all platform zips
+Current behavior:
+- Builds the packaged app on Windows.
+- Uses a PyInstaller `--onefile` build.
+- Installs and bundles FFmpeg/FFprobe from the Windows runner.
+- Uploads a versioned ZIP artifact containing the stable `BZPSPExtractor.exe` executable plus notices/licenses.
+- Pull requests build a CI package using neutral Windows version metadata.
+- On tag pushes matching `v*`, creates a GitHub Release and attaches the versioned Windows ZIP.
 
 Triggering a release:
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 ## Licensing
@@ -89,13 +114,13 @@ FFmpeg note:
 - FFmpeg binaries can be LGPL or GPL depending on how they were built.
 - If you redistribute packaged builds, you are responsible for complying with the license terms of the FFmpeg binaries you include.
 - The build script tries to copy nearby FFmpeg `LICENSE*`/`COPYING*`/`NOTICE*` files into:
-  - `dist\BZPSP_Extractor\THIRD_PARTY\ffmpeg\`
+  - `dist\BZPSPExtractor\THIRD_PARTY\ffmpeg\`
 
 ## Repo Hygiene (Before Push)
 Recommended checks before pushing:
 
 ```powershell
-python -m compileall app extractors
+python -m compileall app extractors scripts
 git status
 ```
 
@@ -105,5 +130,5 @@ git status
 - Input and output roots are selected in the GUI; no workspace-specific default paths are hardcoded.
 
 ## Credits
-- DragonFF authors for establishing a good baseline for extracting TXD/RWS
-- "Null" Software for extensive initial reverse engineering 
+- DragonFF authors for establishing a good baseline for extracting TXD/RWS.
+- "Null" Software for extensive initial reverse engineering.
