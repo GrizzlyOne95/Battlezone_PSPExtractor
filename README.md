@@ -60,7 +60,7 @@ CompanyName: GrizzlyOne95
 OriginalFilename: BZPSPExtractor.exe
 ```
 
-`FileVersion` and `ProductVersion` are derived from the release tag. Non-release CI/local builds use neutral `0.0.0` metadata unless `BZPSP_VERSION` is set for the local build.
+`FileVersion` and `ProductVersion` are derived from the canonical repository version in CI/release builds. Local builds can override the version with `BZPSP_VERSION`.
 
 ## Build Standalone EXE (Windows)
 ```powershell
@@ -96,8 +96,8 @@ Current behavior:
 - Uses a PyInstaller `--onefile` build.
 - Installs and bundles FFmpeg/FFprobe from the Windows runner.
 - Uploads a versioned ZIP artifact containing the stable `BZPSPExtractor.exe` executable plus notices/licenses.
-- Pull requests build a CI package using neutral Windows version metadata.
-- On tag pushes matching `v*`, creates a GitHub Release and attaches the versioned Windows ZIP.
+- Pushes to `main` and pull requests build a versioned package using the canonical `VERSION` value.
+- A `chore(release): vX.Y.Z` commit or matching `v*` tag creates a GitHub Release and attaches the versioned Windows ZIP.
 
 Triggering a release:
 ```powershell
