@@ -14,10 +14,6 @@ on:
 permissions:
   contents: write
 
-env:
-  PACKAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'ci' }}
-  WINDOWS_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.0.0' }}
-
 jobs:
   build:
     name: Build (${{ matrix.os }})
@@ -36,6 +32,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve package version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$(tr -d '[:space:]' < VERSION)"
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Install FFmpeg (Windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -52,7 +61,19 @@ jobs:
 
       - name: Build package
         run: |
-          python scripts/build_ci.py --platform "${{ runner.os }}" --version "${{ env.WINDOWS_VERSION }}" --package-version "${{ env.PACKAGE_VERSION }}"
+          python scripts/build_ci.py --platform "${{ runner.os }}" --version "${{ steps.version.outputs.version }}" --package-version "${{ steps.version.outputs.tag }}"
+
+      - name: Verify standalone Windows output
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ".\dist\BZPSPExtractor.exe" -PathType Leaf)) {
+            throw "Expected standalone dist\BZPSPExtractor.exe was not produced"
+          }
+          if (Test-Path ".\dist\BZPSPExtractor" -PathType Container) {
+            throw "Unexpected onedir bundle dist\BZPSPExtractor was produced"
+          }
+          Get-Item ".\dist\BZPSPExtractor.exe"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -64,11 +85,25 @@ jobs:
 
   release:
     name: Create Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: "${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'chore(release): v')) }}"
     needs: build
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: release_version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -77,6 +112,9 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_version.outputs.tag }}
+          name: ${{ steps.release_version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: artifacts/**/Battlezone_PSPExtractor-v*-windows.zip
