@@ -14,6 +14,7 @@ This app wraps the extraction scripts in `extractors`:
 - `extract_psp_movies.py`
 - `extract_psp_data_tables.py`
 - `extract_psp_font_metrics.py`
+- `extract_psp_code.py` (executable code map for reverse engineering)
 
 ## Features
 - Direct ISO support (`.iso`) with automatic `PSP_GAME/USRDIR` extraction to a local cache.
@@ -23,6 +24,24 @@ This app wraps the extraction scripts in `extractors`:
 - Run single tasks or run all tasks sequentially.
 - Uses `038_PU_Ammo_big.png` as app/window icon.
 - Saved local config (`bzpsp_gui_config.json`).
+
+## Code Map (reverse engineering)
+`extract_psp_code.py` maps the game executable, `PSP_GAME/SYSDIR/BOOT.BIN` (an unencrypted,
+stripped PSP PRX; the `~PSP` `EBOOT.BIN` is the encrypted copy of the same program):
+
+```powershell
+python extractors\extract_psp_code.py --input <ISO or disc folder or BOOT.BIN> --out-root out\code_map --relocated-elf --listing
+```
+
+Outputs:
+- `code_map.json` / `code_map.md`: imports (NIDs resolved), functions, call graph, string xrefs,
+  source-file attribution from leaked assert paths, function-pointer/vtable tables
+- `ghidra_symbols.txt`: names for Ghidra's `ImportSymbolsScript.py`
+- `BOOT_relocated.elf` (`--relocated-elf`): PSP relocations applied at load base 0, loads in stock
+  Ghidra as `MIPS:LE:32:default`
+- `listing.asm` (`--listing`, needs `pip install capstone`): annotated disassembly
+
+Findings are documented in `reverse_engineering/PSP_GAME_CODE.md`.
 
 ## Source Requirements
 - Python 3.12+ on Windows

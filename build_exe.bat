@@ -69,6 +69,7 @@ python -m PyInstaller ^
   --hidden-import extractors.extract_psp_movies ^
   --hidden-import extractors.extract_psp_data_tables ^
   --hidden-import extractors.extract_psp_font_metrics ^
+  --hidden-import extractors.extract_psp_code ^
   --add-binary "%FFMPEG_EXE%;." ^
   --add-binary "%FFPROBE_EXE%;." ^
   --add-data "038_PU_Ammo_big.png;." ^
