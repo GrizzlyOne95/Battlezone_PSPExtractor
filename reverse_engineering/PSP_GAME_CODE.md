@@ -8,6 +8,11 @@ framework, each of the six match types, hover tank physics, weapons, tweaks, che
 networking and the save file. It extends [`PSP_GAME_MATCH_LOGIC.md`](PSP_GAME_MATCH_LOGIC.md),
 which recovered the game-type factory and constructors.
 
+To reimplement the gameplay in another engine (an Unreal port, or Battlezone 98 Redux mods), use
+[`port/PORT_SPEC.md`](port/PORT_SPEC.md). It has the exact per-tick equations, axis conversions,
+the constants with their addresses, normalized tables and a tested C++ reference implementation.
+The pickup, jump pad and knockback values are there too.
+
 All addresses are static virtual addresses with the PRX loaded at base 0 (file offset − 0x80 for
 the first segment). Emulators such as PPSSPP load the module at `0x08804000`; add that base when
 following addresses in a debugger.
@@ -25,7 +30,7 @@ python extractors/extract_psp_code.py --input <ISO | disc folder | BOOT.BIN> \
     --out-root out/code_map --relocated-elf --listing
 ```
 
-- `code_map.json` / `code_map.md`: 8,209 functions, 250/250 imports named, call graph, string
+- `code_map.json` / `code_map.md`: 7,311 functions, 250/250 imports named, call graph, string
   cross-references, source-file attribution, 179 function-pointer tables / vtables.
 - `BOOT_relocated.elf`: PSP relocations applied at base 0 and `e_type` set to `ET_EXEC`. It imports
   into stock Ghidra 11 as `MIPS:LE:32:default` with correct cross-references (no PSP loader
@@ -313,11 +318,14 @@ The compiled-in defaults (for example turn rate 25/22.5/20) are overwritten by t
 
 - Four hover points (offsets at `0x24e0ac`, one updated per frame in rotation) each raycast down
   up to the Suspension Height `h`. The collision surface attribute (`bdInt.attr`) is recorded.
-- Spring force per point: `gain · ½ · dt · ((h + 1 − d) · (h + 1))²`, where `d` is the hit distance.
+- Spring impulse per point: `gain · ½ · dt · ((1 − t) · (h + 1))²`, where `t` is the hit fraction
+  along the `h`-long ray.
 - Damping: `−damp · h · 60 · dt · v_vertical`.
 - Upright torque: `upright_gain · 100 · dt · (2 − up·worldUp)⁵`, which keeps the tank level
   (stronger the more it tilts).
-- The combined force and torque are scaled by 0.4 and handed to the rigid body.
+- The torque is scaled by 0.4. Both impulses go to the rigid body (mass 100, inertia 300).
+
+The exact per-tick algorithm is in [`port/PORT_SPEC.md`](port/PORT_SPEC.md) §3.
 
 ### Driving (`0x954a0`, code)
 
@@ -325,7 +333,8 @@ The compiled-in defaults (for example turn rate 25/22.5/20) are overwritten by t
   [0.1, 1]. Angular velocity decays at 10/s.
 - **Speed**: forward and strafe speed are capped separately by the motion table plus the Top
   Speed tweak (`tank+0x5b4`). Reverse runs at 75%.
-- **Gravity**: 9.8 m/s², projected along the slope.
+- **Gravity**: the physics library applies 30 m/s². The drive model adds another 9.8 m/s² plus a
+  speed-scaled downforce along the tank's up vector.
 - **Nitro**: meter at `tank+0x828`, 0–1. Boosting multiplies speed by the nitro multiplier
   (`+0x824`, from the tank's nitro weapon plus the Nitro tweak) and drains the meter over the
   nitro duration. It refills at 0.125/s (8 s from empty). The HUD shows the meter for the local
@@ -424,7 +433,7 @@ A tank has **three tweak slots**. Each slot holds one enhancement at *major* str
 | 4 | HP Recharge Delay (s) | 2 / 1 | subtracted from regen delay `+0x928` |
 | 5 | Vampire Transfer | 0.2 / 0.1 | weapon manager (damage → health) |
 | 6 | Lock-on Range (m) | 50 / 25 | weapon manager |
-| 7 | Damage (%) | 10 / 5 | weapon manager |
+| 7 | Damage (flat bonus per projectile) | 10 / 5 | weapon `+0x248` |
 | 8 | Splash Damage Radius (m) | 15 / 5 | weapon manager |
 | 9 | Team Special Recharge (s) | 10 / 5 | subtracted from special recharge `+0x588` |
 
@@ -525,6 +534,4 @@ with this key.
 - Exact slot semantics for the unnamed mid-vtable entries of `HoverTank` and the equipment classes.
 - AI behaviour (`aiPathFinder.cpp`, cover/defense/offense/roam roles in the speech table).
 - Full profile (save) layout, tournament progression and the unlock conditions.
-- Pickup and dispenser values (the doubling cheat confirms a multiplier; base amounts are in code
-  around `0x2786c`).
 - How cheats are unlocked on the Cheats screen.

@@ -1,0 +1,686 @@
+{
+ "ppsspp_base": "0x08804000",
+ "constants": [
+  {
+   "group": "timing",
+   "name": "nominal_tick",
+   "value": 0.03333333333333333,
+   "unit": "s",
+   "address": "0x0389e8",
+   "ppsspp_address": "0x0883c9e8",
+   "evidence": "code",
+   "note": "dt starts at 1/30; frame dt = average of last two vblank counts / 60 (0x39ed8)"
+  },
+  {
+   "group": "timing",
+   "name": "tank_dt_clamp",
+   "value": 0.06666666666666667,
+   "unit": "s",
+   "address": "0x08f43c",
+   "ppsspp_address": "0x0889343c",
+   "evidence": "code"
+  },
+  {
+   "group": "timing",
+   "name": "net_tick_unit",
+   "value": 16667,
+   "unit": "us per vblank",
+   "address": "0x058d78",
+   "ppsspp_address": "0x0885cd78",
+   "evidence": "code",
+   "note": "lockstep tick = vblanks * 0x411b us"
+  },
+  {
+   "group": "tank",
+   "name": "mass",
+   "value": 100.0,
+   "unit": "kg",
+   "address": "0x08f9c8",
+   "ppsspp_address": "0x088939c8",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "inertia",
+   "value": 300.0,
+   "unit": "kg m^2 (isotropic)",
+   "address": "0x08f830",
+   "ppsspp_address": "0x08893830",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "body_gravity",
+   "value": 30.0,
+   "unit": "m/s^2",
+   "address": "0x08f830",
+   "ppsspp_address": "0x08893830",
+   "evidence": "code",
+   "note": "per-body gravity handed to the physics library"
+  },
+  {
+   "group": "tank",
+   "name": "drive_gravity",
+   "value": 9.8,
+   "unit": "m/s^2",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code",
+   "note": "added by the drive model on top of body gravity"
+  },
+  {
+   "group": "tank",
+   "name": "downforce_factor",
+   "value": 1.5,
+   "unit": "",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code",
+   "note": "v += -9.8*dt*up*(|v|*1.5/maxSpeed)"
+  },
+  {
+   "group": "tank",
+   "name": "steep_limit_deg",
+   "value": 25.0,
+   "unit": "deg",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code",
+   "note": "sin(25) threshold on at.y and |right.y|"
+  },
+  {
+   "group": "tank",
+   "name": "angular_decay",
+   "value": 10.0,
+   "unit": "1/s",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "steer_ramp",
+   "value": {
+    "min": 0.1,
+    "hold_scale": 2.0,
+    "linear_part": 0.3,
+    "ramped_part": 0.7
+   },
+   "unit": "",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "throttle_pitch",
+   "value": -2.0,
+   "unit": "rad/s per unit throttle",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "reverse_speed_scale",
+   "value": 0.75,
+   "unit": "",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "air_control",
+   "value": 0.25,
+   "unit": "",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "approach_band",
+   "value": 0.2,
+   "unit": "fraction of max speed",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code",
+   "note": "dv scaled by err*5 inside the band"
+  },
+  {
+   "group": "tank",
+   "name": "coast_decel_scale",
+   "value": 0.5,
+   "unit": "",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "nitro_refill",
+   "value": 0.125,
+   "unit": "meter/s",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "hover_probes",
+   "value": [
+    [
+     2,
+     0,
+     2
+    ],
+    [
+     -2,
+     0,
+     2
+    ],
+    [
+     2,
+     0,
+     -2
+    ],
+    [
+     -2,
+     0,
+     -2
+    ]
+   ],
+   "unit": "m (local)",
+   "address": "0x24e0ac",
+   "ppsspp_address": "0x08a520ac",
+   "evidence": "data"
+  },
+  {
+   "group": "tank",
+   "name": "hover_torque_scale",
+   "value": 0.4,
+   "unit": "",
+   "address": "0x094da0",
+   "ppsspp_address": "0x08898da0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "hover_spring",
+   "value": "((1-t)*(h+1))^2 * suspensionGain * 0.5 * dt * up.y",
+   "unit": "impulse",
+   "address": "0x094da0",
+   "ppsspp_address": "0x08898da0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "hover_damp",
+   "value": "-hoverDamp * h * 60 * dt * v_local.y (along up)",
+   "unit": "impulse",
+   "address": "0x094da0",
+   "ppsspp_address": "0x08898da0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "upright_gain_scale",
+   "value": "dt * uprightGain * 100 * (2 - up.y)^5",
+   "unit": "angular impulse",
+   "address": "0x094da0",
+   "ppsspp_address": "0x08898da0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "out_of_world_y",
+   "value": -225.0,
+   "unit": "m",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "code"
+  },
+  {
+   "group": "tank",
+   "name": "impact_impulse_scale",
+   "value": 10000.0,
+   "unit": "N s per unit impactForce",
+   "address": "0x094758",
+   "ppsspp_address": "0x08898758",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "splash_falloff",
+   "value": "damage * (1 - dist/radius)",
+   "unit": "",
+   "address": "0x0064e8",
+   "ppsspp_address": "0x0880a4e8",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "combo_swarm",
+   "value": {
+    "bullet_id": 14,
+    "multiplier": 13,
+    "max_gap_s": 2
+   },
+   "unit": "",
+   "address": "0x098808",
+   "ppsspp_address": "0x0889c808",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "combo_fusion",
+   "value": {
+    "bullet_id": 8,
+    "multiplier": 15,
+    "max_gap_s": 2
+   },
+   "unit": "",
+   "address": "0x098808",
+   "ppsspp_address": "0x0889c808",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "shooter_speed_inherit",
+   "value": 0.05,
+   "unit": "",
+   "address": "0x007328",
+   "ppsspp_address": "0x0880b328",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "projectile_velocity_units",
+   "value": "per update (not scaled by dt)",
+   "unit": "",
+   "address": "0x007950",
+   "ppsspp_address": "0x0880b950",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "jump_pad_radius",
+   "value": 15.0,
+   "unit": "m",
+   "address": "0x031ad0",
+   "ppsspp_address": "0x08835ad0",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "jump_pad_size_scale",
+   "value": [
+    0.925,
+    1.0,
+    1.05
+   ],
+   "unit": "",
+   "address": "0x23412c",
+   "ppsspp_address": "0x08a3812c",
+   "evidence": "data"
+  },
+  {
+   "group": "combat",
+   "name": "jump_pad_scan_interval",
+   "value": 0.1,
+   "unit": "s",
+   "address": "0x031cfc",
+   "ppsspp_address": "0x08835cfc",
+   "evidence": "code"
+  },
+  {
+   "group": "combat",
+   "name": "jump_pad_cooldown",
+   "value": 0.125,
+   "unit": "s",
+   "address": "0x031ad0",
+   "ppsspp_address": "0x08835ad0",
+   "evidence": "code"
+  },
+  {
+   "group": "pickups",
+   "name": "armor_shield",
+   "value": {
+    "hp": 150,
+    "duration_s": "25 + pickup tweak"
+   },
+   "unit": "",
+   "address": "0x02786c",
+   "ppsspp_address": "0x0882b86c",
+   "evidence": "code"
+  },
+  {
+   "group": "pickups",
+   "name": "double_damage_duration",
+   "value": 20.0,
+   "unit": "s",
+   "address": "0x0991fc",
+   "ppsspp_address": "0x0889d1fc",
+   "evidence": "code",
+   "note": "dispenser passes 10+tweak but the function stores 20"
+  },
+  {
+   "group": "pickups",
+   "name": "invisibility_duration",
+   "value": "15 + tweak",
+   "unit": "s",
+   "address": "0x02786c",
+   "ppsspp_address": "0x0882b86c",
+   "evidence": "code"
+  },
+  {
+   "group": "pickups",
+   "name": "regen",
+   "value": {
+    "rate": 10,
+    "duration_s": "15 + tweak"
+   },
+   "unit": "hp/s",
+   "address": "0x02786c",
+   "ppsspp_address": "0x0882b86c",
+   "evidence": "code"
+  },
+  {
+   "group": "pickups",
+   "name": "energy_small_big",
+   "value": [
+    0.5,
+    1.0
+   ],
+   "unit": "fraction of max",
+   "address": "0x02786c",
+   "ppsspp_address": "0x0882b86c",
+   "evidence": "code"
+  },
+  {
+   "group": "pickups",
+   "name": "health_small_big",
+   "value": [
+    0.5,
+    1.0
+   ],
+   "unit": "fraction of max",
+   "address": "0x02786c",
+   "ppsspp_address": "0x0882b86c",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "intro_wait",
+   "value": 5.0,
+   "unit": "s",
+   "address": "0x045564",
+   "ppsspp_address": "0x08849564",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "countdown",
+   "value": 3.0,
+   "unit": "s",
+   "address": "0x045564",
+   "ppsspp_address": "0x08849564",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "overtime_extension",
+   "value": "max(0.1 * timeLimit, 60)",
+   "unit": "s",
+   "address": "0x045564",
+   "ppsspp_address": "0x08849564",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "one_minute_warning",
+   "value": 61.0,
+   "unit": "s left",
+   "address": "0x0452b0",
+   "ppsspp_address": "0x088492b0",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "respawn_human_timeout",
+   "value": 35.0,
+   "unit": "s",
+   "address": "0x044b6c",
+   "ppsspp_address": "0x08848b6c",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "respawn_ai_delay",
+   "value": 4.0,
+   "unit": "s",
+   "address": "0x044b6c",
+   "ppsspp_address": "0x08848b6c",
+   "evidence": "code"
+  },
+  {
+   "group": "match",
+   "name": "spawn_lift",
+   "value": 5.0,
+   "unit": "m",
+   "address": "0x045e40",
+   "ppsspp_address": "0x08849e40",
+   "evidence": "code"
+  },
+  {
+   "group": "ctf",
+   "name": "radius",
+   "value": 20.0,
+   "unit": "m",
+   "address": "0x02dfa4",
+   "ppsspp_address": "0x08831fa4",
+   "evidence": "code"
+  },
+  {
+   "group": "ctf",
+   "name": "dropped_auto_return",
+   "value": 20.0,
+   "unit": "s",
+   "address": "0x02ef20",
+   "ppsspp_address": "0x08832f20",
+   "evidence": "code"
+  },
+  {
+   "group": "ctf",
+   "name": "capture_points",
+   "value": {
+    "player": 5,
+    "team": 1
+   },
+   "unit": "",
+   "address": "0x03b6b4",
+   "ppsspp_address": "0x0883f6b4",
+   "evidence": "code"
+  },
+  {
+   "group": "ctf",
+   "name": "return_points",
+   "value": 1,
+   "unit": "",
+   "address": "0x03b6b4",
+   "ppsspp_address": "0x0883f6b4",
+   "evidence": "code"
+  },
+  {
+   "group": "fah",
+   "name": "pickup_radius",
+   "value": 15.0,
+   "unit": "m",
+   "address": "0x023a7c",
+   "ppsspp_address": "0x08827a7c",
+   "evidence": "code"
+  },
+  {
+   "group": "fah",
+   "name": "dropped_reset",
+   "value": 15.0,
+   "unit": "s",
+   "address": "0x023a7c",
+   "ppsspp_address": "0x08827a7c",
+   "evidence": "code"
+  },
+  {
+   "group": "fah",
+   "name": "hold_score_interval",
+   "value": 2.0,
+   "unit": "s",
+   "address": "0x03d7f8",
+   "ppsspp_address": "0x088417f8",
+   "evidence": "code"
+  },
+  {
+   "group": "hz",
+   "name": "radius",
+   "value": 30.0,
+   "unit": "m",
+   "address": "0x0313a4",
+   "ppsspp_address": "0x088353a4",
+   "evidence": "code"
+  },
+  {
+   "group": "hz",
+   "name": "capture_time",
+   "value": 3.0,
+   "unit": "s",
+   "address": "0x0313a4",
+   "ppsspp_address": "0x088353a4",
+   "evidence": "code"
+  },
+  {
+   "group": "hz",
+   "name": "check_interval",
+   "value": 1.0,
+   "unit": "s",
+   "address": "0x0313a4",
+   "ppsspp_address": "0x088353a4",
+   "evidence": "code"
+  },
+  {
+   "group": "hz",
+   "name": "seconds_per_point_by_pads",
+   "value": [
+    0,
+    3,
+    2,
+    1
+   ],
+   "unit": "s",
+   "address": "0x03c604",
+   "ppsspp_address": "0x08840604",
+   "evidence": "code"
+  },
+  {
+   "group": "ko",
+   "name": "core_health",
+   "value": 100.0,
+   "unit": "hp",
+   "address": "0x24b764",
+   "ppsspp_address": "0x08a4f764",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "core_shield",
+   "value": 1600.0,
+   "unit": "hp",
+   "address": "0x24b768",
+   "ppsspp_address": "0x08a4f768",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "pad_radius",
+   "value": 20.0,
+   "unit": "m",
+   "address": "0x24b738",
+   "ppsspp_address": "0x08a4f738",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "pad_link_radius",
+   "value": 150.0,
+   "unit": "m",
+   "address": "0x24b73c",
+   "ppsspp_address": "0x08a4f73c",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "pad_cost",
+   "value": 10.0,
+   "unit": "energy",
+   "address": "0x24b740",
+   "ppsspp_address": "0x08a4f740",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "pad_ratio",
+   "value": 2.0,
+   "unit": "health per energy",
+   "address": "0x24b744",
+   "ppsspp_address": "0x08a4f744",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "pad_tick",
+   "value": 1.0,
+   "unit": "s",
+   "address": "0x24b748",
+   "ppsspp_address": "0x08a4f748",
+   "evidence": "data"
+  },
+  {
+   "group": "ko",
+   "name": "destroy_points",
+   "value": 5,
+   "unit": "",
+   "address": "0x03d240",
+   "ppsspp_address": "0x08841240",
+   "evidence": "code"
+  },
+  {
+   "group": "globals",
+   "name": "game_type_ptr",
+   "value": null,
+   "unit": "pointer",
+   "address": "0x24b770",
+   "ppsspp_address": "0x08a4f770",
+   "evidence": "code",
+   "note": "current GameType object"
+  },
+  {
+   "group": "globals",
+   "name": "game_ptr",
+   "value": null,
+   "unit": "pointer",
+   "address": "0x24dd3c",
+   "ppsspp_address": "0x08a51d3c",
+   "evidence": "code",
+   "note": "game/app object (dt at +0x108c)"
+  },
+  {
+   "group": "globals",
+   "name": "tank_motion_table",
+   "value": null,
+   "unit": "20 x 3 floats",
+   "address": "0x24df58",
+   "ppsspp_address": "0x08a51f58",
+   "evidence": "code",
+   "note": "memory row order differs from CSV order"
+  }
+ ]
+}

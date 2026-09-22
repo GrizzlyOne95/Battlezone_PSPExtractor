@@ -511,8 +511,14 @@ class Analysis:
                 prev = prx.u32(target - 8)
                 if prev == 0x03E00008:
                     starts.add(target)
-        for target in list(self.code_refs.values()) + list(self.data_ptrs.values()):
+        for target in self.code_refs.values():
             if prx.in_code(target) and target % 4 == 0:
+                starts.add(target)
+        # Data pointers into code are vtable slots/callbacks, but switch jump-table cases
+        # land mid-function and must not start new functions.
+        case_targets = self._jump_table_targets()
+        for target in self.data_ptrs.values():
+            if prx.in_code(target) and target % 4 == 0 and target not in case_targets:
                 starts.add(target)
         # a function also begins right after "jr ra; <delay>" when followed by a stack frame setup
         for va in range(prx.text_start, prx.text_end - 8, 4):
@@ -522,6 +528,31 @@ class Analysis:
                 if (ins >> 16) == 0x27BD and (ins & 0x8000):  # addiu sp, sp, -N
                     starts.add(nxt)
         return sorted(s for s in starts if prx.in_code(s))
+
+    def _jump_table_targets(self) -> set[int]:
+        """Targets of switch jump tables: 4-byte runs of code pointers in .rodata whose first
+        entry is loaded by code (lui/addiu) and whose cases lie just after that code."""
+        rodata = self.prx.by_name.get(".rodata")
+        if not rodata:
+            return set()
+        lo, hi = rodata["addr"], rodata["addr"] + rodata["size"]
+        loaders: dict[int, list[int]] = defaultdict(list)
+        for site, target in self.code_refs.items():
+            if lo <= target < hi:
+                loaders[target].append(site)
+        cases: set[int] = set()
+        for table, sites in loaders.items():
+            entries = []
+            va = table
+            while va in self.data_ptrs and self.prx.in_code(self.data_ptrs[va]):
+                entries.append(self.data_ptrs[va])
+                va += 4
+            if len(entries) < 2:
+                continue
+            site = min(sites)
+            if all(site < e < site + 0x4000 for e in entries):
+                cases.update(entries)
+        return cases
 
     def _build_function_table(self) -> None:
         prx = self.prx

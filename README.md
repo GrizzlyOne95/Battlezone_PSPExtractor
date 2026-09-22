@@ -43,6 +43,20 @@ Outputs:
 
 Findings are documented in `reverse_engineering/PSP_GAME_CODE.md`.
 
+### Port kit (Unreal / Battlezone 98 Redux)
+`reverse_engineering/port/` turns the findings into something you can reimplement:
+- `PORT_SPEC.md`: exact tank, weapon and match equations, axis conversions, engine notes and a
+  PPSSPP validation plan
+- `bzpsp_constants.json`: code constants with their `BOOT.BIN` and PPSSPP addresses
+- `port_tables.json`: tank, tweak, weapon and projectile tables as normalized JSON; rebuild it from
+  your own extraction:
+
+```powershell
+python scripts\build_port_tables.py --tables <data_tables_json or USRDIR\leveldata> --out port_tables.json
+```
+
+- `reference/`: engine-neutral C++17 reference implementation with tests (`cmake -S reverse_engineering/port/reference -B build/ref`)
+
 ## Source Requirements
 - Python 3.12+ on Windows
 - `pip install -r requirements.txt`
