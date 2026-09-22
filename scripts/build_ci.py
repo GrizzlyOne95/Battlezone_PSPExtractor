@@ -26,6 +26,7 @@ HIDDEN_IMPORTS = [
     "extractors.extract_psp_movies",
     "extractors.extract_psp_data_tables",
     "extractors.extract_psp_font_metrics",
+    "extractors.extract_psp_code",
 ]
 FILE_DATAS = [
     "038_PU_Ammo_big.png",

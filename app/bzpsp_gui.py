@@ -65,6 +65,9 @@ def _load_embedded_extractor_module(extractor_name: str):
     if key == "extract_psp_font_metrics.py":
         from extractors import extract_psp_font_metrics as mod  # type: ignore
         return mod
+    if key == "extract_psp_code.py":
+        from extractors import extract_psp_code as mod  # type: ignore
+        return mod
     raise ValueError(f"Unsupported extractor: {extractor_name}")
 
 
@@ -441,6 +444,7 @@ class BZPSPGUI:
             "Movies": ttk.Frame(notebook, style="Transparent.TFrame"),
             "Data": ttk.Frame(notebook, style="Transparent.TFrame"),
             "Fonts": ttk.Frame(notebook, style="Transparent.TFrame"),
+            "Code": ttk.Frame(notebook, style="Transparent.TFrame"),
         }
         for name, frame in tabs.items():
             notebook.add(frame, text=name)
@@ -452,6 +456,7 @@ class BZPSPGUI:
         self._build_movies_tab(tabs["Movies"])
         self._build_data_tab(tabs["Data"])
         self._build_fonts_tab(tabs["Fonts"])
+        self._build_code_tab(tabs["Code"])
 
         log_frame = ttk.LabelFrame(wrap, text="Log", style="TLabelframe")
         log_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
@@ -597,6 +602,15 @@ class BZPSPGUI:
         btn.pack(anchor="w", padx=8, pady=8)
         self.run_buttons.append(btn)
 
+    def _build_code_tab(self, parent: ttk.Frame) -> None:
+        frame = ttk.LabelFrame(parent, text="Executable Code Map (BOOT.BIN)", style="TLabelframe")
+        frame.pack(fill="x", padx=10, pady=10)
+        self._add_path_info(frame, "Input: <ISO> or <PSP_GAME>/SYSDIR/BOOT.BIN")
+        self._add_path_info(frame, "Output: <Output Root>/code_map (JSON/Markdown map, Ghidra symbols, relocated ELF)")
+        btn = ttk.Button(frame, text="Run Code Map", style="Action.TButton", command=self.run_code)
+        btn.pack(anchor="w", padx=8, pady=8)
+        self.run_buttons.append(btn)
+
     def _browse_dir(self, var: tk.StringVar) -> None:
         value = filedialog.askdirectory()
         if value:
@@ -725,6 +739,7 @@ class BZPSPGUI:
             "movie_out": out_root / "movies",
             "data_out": out_root / "data_tables_json",
             "font_out": out_root / "font_metrics_json",
+            "code_out": out_root / "code_map",
         }
 
     def _set_paths_from_usrdir(self, usrdir: Path, out_root: Path) -> None:
@@ -1055,6 +1070,22 @@ class BZPSPGUI:
             "--out-root", str(paths["font_out"]),
             ],
         )
+    def _build_code_cmd(self, opts: dict[str, Any] | None = None) -> list[str]:
+        paths = self._paths_for_opts(opts)
+        raw_input = str((opts or {}).get("input_root") or self.var_input_root.get()).strip()
+        in_path = Path(raw_input)
+        if not (in_path.is_file() and in_path.suffix.lower() == ".iso"):
+            # SYSDIR sits next to USRDIR, so resolve it from the resolved USRDIR.
+            in_path = Path(paths["usrdir"]).parent / "SYSDIR"
+        return self._build_extractor_cmd(
+            "extract_psp_code.py",
+            [
+            "--input", str(in_path),
+            "--out-root", str(paths["code_out"]),
+            "--relocated-elf",
+            ],
+        )
+
     def run_textures(self) -> None:
         self._start_pipeline([("Textures", self._build_textures_cmd)])
 
@@ -1076,6 +1107,9 @@ class BZPSPGUI:
     def run_fonts(self) -> None:
         self._start_pipeline([("Fonts", self._build_font_cmd)])
 
+    def run_code(self) -> None:
+        self._start_pipeline([("Code", self._build_code_cmd)])
+
     def run_all(self) -> None:
         self._start_pipeline(
             [
@@ -1086,6 +1120,7 @@ class BZPSPGUI:
                 ("Movies", self._build_movies_cmd),
                 ("Data", self._build_data_cmd),
                 ("Fonts", self._build_font_cmd),
+                ("Code", self._build_code_cmd),
             ]
         )
 

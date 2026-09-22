@@ -343,6 +343,9 @@ generic GameType creation
 
 ### Not yet proven
 
+> Update: most items below are now resolved in [`PSP_GAME_CODE.md`](PSP_GAME_CODE.md)
+> (vtable slot roles, score/timer ownership, per-mode rules, network model).
+
 - Exact C++ class names for every derived mode (the mode-to-constructor mapping itself is proven).
 - Full dispatch-table slot semantics / final virtual method names.
 - Destructor boundaries for every mode.
