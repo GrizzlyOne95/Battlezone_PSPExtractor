@@ -193,23 +193,88 @@ The `GameType.cpp` string at static VA `0x2350b8` is referenced near:
 These are high-priority locations for reconstruction because assertions commonly sit next
 to container bounds checks, object registration, state transitions, and mode setup.
 
-## 7. GameType initialization / creation anchor
+## 7. GameType factory and all six mode constructors recovered
 
-A useful executable region starts around `0x00044df4`.
+The executable contains a direct six-way mode factory at **`0x000396d4`**.
 
-The surrounding routine references the diagnostic text:
+Its second argument is range-checked with `mode < 6`, then compared against constants
+`1`, `2`, `3`, `4`, and `5`; the fall-through path is mode `0`. Each branch
+allocates a mode object and calls one distinct constructor-like routine.
+
+The constructor mapping is therefore recoverable directly from the numeric enum in
+`BZ_SP_TOURNEY_DEFS.CSV`:
+
+| Mode ID | Mode | Constructor-like routine | Installed dispatch table |
+|---:|---|---:|---:|
+| 0 | Deathzone | `0x0003bc18` | `0x00256f1c` |
+| 1 | Team Deathzone | `0x0003e078` | `0x0025707c` |
+| 2 | Capture the Flag | `0x0003b618` | `0x00256ec4` |
+| 3 | Fox and Hound | `0x0003dac8` | `0x00257024` |
+| 4 | Hot Zone | `0x0003c550` | `0x00256f74` |
+| 5 | Knockout | `0x0003d18c` | `0x00256fcc` |
+
+This identification is **high confidence**, not merely a naming guess:
+
+1. All six routines call the same initializer at **`0x00046bd0`** first.
+2. All six install a different dispatch-table pointer into the same object field.
+3. All six write their exact numeric mode ID to **object offset `+0x4`**.
+4. The factory reaches each routine from the matching numeric branch.
+
+Accordingly, `0x46bd0` is a strong candidate for the base `GameType` constructor /
+initializer, and `0x396d4` is a strong candidate for a `CreateGameType(mode)`-style
+factory.
+
+### Hot Zone constructor details
+
+`0x0003c550` is now specifically identifiable as the Hot Zone constructor / initializer:
+
+- calls common base initializer `0x46bd0`
+- installs dispatch table `0x256f74`
+- writes mode ID **4** to `this + 0x4`
+- zeroes the Hot Zone target/pad count
+- initializes three nearby Hot Zone-specific state regions
+
+The dispatch table contains several Hot Zone-local methods clustered in the same code area,
+including:
+
+- `0x0003bf18`
+- `0x0003bff4`
+- `0x0003c0ac`
+- `0x0003c438`
+- `0x0003c604`
+- `0x0003c828`
+
+Two of these methods directly reference the leaked `GameHotZone.cpp` source-path string.
+
+At `0x3bff4`, the routine iterates exactly **three** stored object pointers and clears /
+releases them, matching the three `HotZonePad` actors present in the Russia 4-player HZ
+level.
+
+At `0x3c438`, a mode-specific registration path appends an object pointer into that same
+Hot Zone object array and increments its count. The code contains a `GameHotZone.cpp`
+assertion reference at source line `0xC3` (195), making this a strong candidate for a
+Hot Zone target/pad registration method. The final method name is still intentionally left
+unassigned until its caller contract is reconstructed.
+
+### Factory caller / match creation path
+
+The factory at `0x396d4` is called from `0x39dd8`. The caller:
+
+- constructs the `disc0:/PSP_GAME/USRDIR/leveldata/` path
+- passes the selected mode ID into the six-way factory
+- stores the returned game-type object in a global/current-game location
+- immediately invokes a virtual method on the new object
+
+This is now the preferred starting point for reconstructing complete match startup.
+
+### Later generic setup anchor
+
+A separate setup region around `0x44df4` still remains useful. It logs:
 
 - `Creating SubGame Type`
 - later, `Game Type Creation completed`
 
-Between those messages the code performs an indirect / virtual call followed by additional
-setup calls.
-
-Working interpretation:
-
-> This routine is very likely part of the generic GameType creation/setup path.
-
-Do **not** name it more specifically until the caller, object layout, and vtable are proven.
+That region appears to perform a later generic setup phase after the mode object exists.
 
 ## 8. Mode resource table in .data
 
@@ -278,9 +343,9 @@ generic GameType creation
 
 ### Not yet proven
 
-- Exact GameType class hierarchy.
-- Exact vtable addresses.
-- Constructor / destructor boundaries.
+- Exact C++ class names for every derived mode (the mode-to-constructor mapping itself is proven).
+- Full dispatch-table slot semantics / final virtual method names.
+- Destructor boundaries for every mode.
 - Which object owns authoritative score and timer state.
 - Which state is network-authoritative vs locally derived.
 - Exact packet serialization for match-state transitions.
@@ -300,18 +365,18 @@ Deliverables:
 - repeatable Ghidra import notes
 - validation against known strings/data pointers
 
-### Work order 2 — reconstruct GameType creation
+### Work order 2 — finish naming GameType creation and dispatch
 
-Start at the `Creating SubGame Type` region around `0x44df4`.
+The mode switch, six constructors, numeric IDs, and candidate dispatch tables are now
+recovered. Continue from factory `0x396d4` and caller `0x39dd8`.
 
-Goals:
+Remaining goals:
 
-- identify caller(s)
-- recover input mode ID
-- identify the GameType object pointer
-- resolve the indirect call target
-- identify vtable
-- label initialization fields
+- name the allocation helpers used by each factory branch
+- confirm the common `0x46bd0` initializer as the base GameType constructor
+- map dispatch-table slot numbers to stable virtual method names
+- trace the first virtual call made immediately after creation
+- correlate the later `Creating SubGame Type` setup block at `0x44df4`
 
 ### Work order 3 — reconstruct Hot Zone first
 
