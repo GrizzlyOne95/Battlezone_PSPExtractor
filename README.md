@@ -47,6 +47,8 @@ Findings are documented in `reverse_engineering/PSP_GAME_CODE.md`.
 `reverse_engineering/port/` turns the findings into something you can reimplement:
 - `PORT_SPEC.md`: exact tank, weapon and match equations, axis conversions, engine notes and a
   PPSSPP validation plan
+- `PORT_AUDIT.md`: every gameplay system with its verification status
+- `AI_SPEC.md` (tank AI and controls) and `LEVEL_FORMAT.md` (`.LVL` entity records)
 - `bzpsp_constants.json`: code constants with their `BOOT.BIN` and PPSSPP addresses
 - `port_tables.json`: tank, tweak, weapon and projectile tables as normalized JSON; rebuild it from
   your own extraction:

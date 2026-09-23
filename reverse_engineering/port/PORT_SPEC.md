@@ -8,6 +8,10 @@ implement directly.
 | File | What it is |
 |---|---|
 | `PORT_SPEC.md` | This document: timing, units, per-tick algorithms, rules, engine notes, validation |
+| `PORT_AUDIT.md` | Checklist of every gameplay system with its verification status and open items |
+| `AI_SPEC.md` | Tank AI (scheduler, perception, targeting, roles, navigation, firing) and the controls |
+| `LEVEL_FORMAT.md` | `.LVL` entity records and every entity type's properties |
+| `physics_materials.json` | The 58 collision-surface materials from `.data 0x24c7c0` |
 | `bzpsp_constants.json` | 72 constants from the code, each with unit, `BOOT.BIN` address, PPSSPP address and evidence |
 | `port_tables.json` | Shipped data tables (tank motion, tweaks, 39 weapons, 34 projectiles) normalized to snake_case JSON |
 | `reference/` | C++17 reference implementation (tank drive/hover, damage, projectiles, match rules) with tests |
@@ -440,6 +444,47 @@ smaller one. Death shakes use the motion table's death shake columns.
 - **Knockout**: each core has 1,600 shield, then 100 health. Destroying one gives 5 points. A
   charge pad (20 m, linked within 150 m) ticks every 1 s; each teammate on it pays 10 energy for
   +20 core health, and that also revives a destroyed core.
+
+### 5.1 Single-player tournament (code: `BZFrontEnd::readSPTourneyFile` `0xc2164`, `0xc2a04`, `0x9aa24`, `0x9ae7c`)
+
+- **Matches:** `BZ_SP_TOURNEY_DEFS.CSV` has up to 28 rows (20 used). The loader reads the
+  columns in order:
+
+| Column | Type | Used as |
+|---|---|---|
+| c0, c1, c2 | int | match settings, copied into the match config (`+0x114`, `+0x10c`, `+0x110`); use the CSV header names |
+| c3 | int | game mode |
+| c4 | int | opponent country code 27–34, which selects the country's AI info page |
+| c5 | string | the level |
+| c6 | — | ignored |
+
+- **Tiers** (`.data 0x240764` start index, `0x24076c` count): tier 1 is matches 0–4,
+  tier 2 is 5–11, tier 3 is 12–18, and the final is match 19.
+- **Awards after each match** (the player's score against the other scores, `0x9b1e4`):
+  - **Placed** (score ≥ the runner-up's score): sets the progression flag from table B
+    (`.data 0x252aa8`, all type 5), which opens later matches.
+  - **Won** (score equals the top score): also sets the prize from table A (`.data 0x2529d0`).
+    Winning the final, whose table A entry is type 5 index 20, plays the victory speech and the
+    medal ending.
+
+| Match | Prize (type, index) | Match | Prize (type, index) |
+|---:|---|---:|---|
+| 0 | (3, 3) | 10 | (1, 11) |
+| 1 | (2, 4) | 11 | (2, 2) |
+| 2 | (0, 0) | 12 | (1, 16) |
+| 3 | (1, 2) | 13 | (1, 10) |
+| 4 | (3, 4) | 14 | (1, 15) |
+| 5 | (0, 2) | 15 | (2, 3) |
+| 6 | (1, 8) | 16 | (1, 14) |
+| 7 | (2, 7) | 17 | (3, 5) |
+| 8 | (1, 17) | 18 | (2, 6) |
+| 9 | (1, 7) | 19 | (5, 20) final |
+
+- **Unlock flags:** stored in the save profile at `+0x5a8 + type·0x74 + index·4` (6 types ×
+  29 slots). The speech lines `unlock_arena`, `unlock_movie`, `unlock_tier`, `unlock_tank` and
+  `unlock_weapon` name the categories. The type-to-category pairing isn't traced yet; type 1
+  indices look like weapon ids, and type 5 is progression. Per-match completion flags are at
+  profile `+0x7ec` and `+0x860` (`PSP_GAME_CODE.md` §11 has the save format).
 
 ## 6. Unreal Engine notes
 

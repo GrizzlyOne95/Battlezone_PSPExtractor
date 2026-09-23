@@ -58,7 +58,7 @@ transform (0x6c bytes): u32 flags, u32, RwMatrix 4×4 floats (right, up, at, pos
 | `Respawn` | 1 | 0xc | p0 = team (int). A spawn point; the matrix is the spawn frame |
 | `World` | 2 | 0x3b0 | variable-length property list (§4) |
 | `NavBeacon` | 3 | 0xf0 | p0 = beacon id (0–399), p1 = radius (int m, 5–150), p2–p7 = 6 neighbour ids (−1 = none), p8–p13 = 6 per-link speed factors, p14–p19 = 6 per-link values. The loader raises the position by **+3 m**. Alternate beacons (for jump pads) go into a second table (`+0x2b720`) |
-| `Door` | 4 | 0x5c | p0 = door type (model table `.data 0x24b718`, stride 0x18), p1–p3 = open offset x/y/z, p4 = scale applied to the offset, p5, p6, p7, p8 = team/lock settings (`+0x160…+0x168`, `+0x14c`, `+0x150`) |
+| `Door` | 4 | 0x5c | p0 = door type (model table `.data 0x24b718`, stride 0x18), p1–p3 = slide direction, p4 = slide speed (m/s), p5 = slide time (s), p6 = time it stays open (s), p7/p8 = AreaTrigger ids that open it (−1 = none). States (`0x2a870`): 0 closed → 1 opening (moves `dir·speed` per second for p5 s) → 2 open (p6 s) → 3 closing (reverse) → 0 |
 | `Sentinel` | 5 | 0x9c | p0 = weapon id, p1 = health, p2 = team (0 → 1, 1 → 0, else 4), p3 = turn rate, p4 = activation radius (squared at load), p5 = active time before it shuts down, p6 = starts active, p7/p8 = AreaTrigger ids that wake it (−1 = none), p9/p10 = burst on/off times, p11 = unknown, p12 = seconds between shots when it has no triggers |
 | `Laser` | 6 | 0x54 | p0 = id, p1 = timer (likely the on/off cycle), p2, p3, p4 = starts on (non-zero) or off, p5, p6 (laser hazard, `0x35814`; p2/p3/p5/p6 are stored at `+0x21c`, `+0x218`, `+0x150`, `+0x154`, meaning not traced) |
 | `FlagStand` | 7 | 0xc | p0 = team. Read by the CTF mode (`0x3b4f4`); also creates that team's flag |
@@ -66,7 +66,7 @@ transform (0x6c bytes): u32 flags, u32, RwMatrix 4×4 floats (right, up, at, pos
 | `KOChargePad` | 9 | 0x18 | p0 = team, p1 = link value (`0x3d0e0` → `0x321c0`) |
 | `Ball` | 10 | 0xc | FAH ball start position (`0x3da4c`) |
 | `Dispenser` | 11 | 0x78 | variable-length list: p0 = dispenser type (pickup kind), p1 = respawn time (s), p2 = starts empty (0 = full), p3, p4 |
-| `AreaTrigger` | 12 | 0x3c | p0 = trigger id (byte), p1 = radius class (0 → 20 m, 1 → 30 m, 2 → 40 m; stored squared), p2–p4 = flags (`0x23208` stores them at `+0x148…+0x158`; meaning not traced) |
+| `AreaTrigger` | 12 | 0x3c | p0 = trigger id (byte), p1 = radius class (0 → 20 m, 1 → 30 m, 2 → 40 m; stored squared), p2 = re-arm delay (s, used when p3 = 0), p3 = one-shot if non-zero, p4 = flag. Runtime (`0x23360`): when a tank enters the radius it notifies up to 6 listeners (doors, sentinels, lasers) and, for the local player, plays a `trap_*` announcer line |
 | `Breakable` | 13 | 0x18 | p0 = breakable type (table `.data 0x2336c0`, stride 0x30: model, hit points, sound), p1 = value (health) |
 | `RepairPad`, `AmmoPad` | — | — | recognised but **not supported** (the loader prints a warning and skips them) |
 
@@ -99,8 +99,8 @@ gameplay.
 
 ## 5. Open items
 
-- **Unnamed properties:** a few Door, Laser and AreaTrigger properties are named only by where
-  they're stored. Their update functions (`Door__029d70`, `0x35110…`, `0x23a7c`) give the rest.
+- **Unnamed properties:** a few Laser properties (and AreaTrigger p4) are named only by where
+  they're stored. The laser update (`0x351c4`) gives the rest.
 - **Pickup placement:** check it against your extracted LVL JSON. Pickups appear to come from
   Dispensers plus mode code (8 pickup slots at `GameType + 0xf1c0`); there's no `Pickup` record
   type.
