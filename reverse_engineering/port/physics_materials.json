@@ -1,411 +1,416 @@
 {
  "source": "BOOT.BIN .data 0x24c7c0, 58 x 0x18 bytes (sub_04efdc)",
- "note": "Per collision-world material id (triangle attribute). The contact callback returns a, b and c (as out[1], out[0], out[2]); d is stored but not returned there. Likely friction/restitution/scale but the labels are not verified. Invalid ids fall back to a=0.5, b=0.77, c=1.0.",
+ "note": "Contact material table, 0x18 bytes per row: +0 restitution, +4 friction, +8 grip, +0xc d. Per contact (0x11b658): mu = friction_A * friction_B, e = restitution_A * restitution_B, grip = (grip_A + grip_B) / 2; the impulse is in PORT_SPEC.md 4.6 (0x13661c, emulated). d is stored but the contact callback (0x4efdc) does not return it. Invalid ids fall back to restitution 0.5, friction 0.77, grip 1.0.",
+ "used_by": {
+  "0": "the world side of every world contact, and doors",
+  "11": "all five tank collision spheres",
+  "19": "contacts touching this material are dropped (0x11b844)"
+ },
  "materials": [
   {
    "id": 0,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 1,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 2,
-   "a": 0.01,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.01,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 3,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.1,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.1,
    "d": 0.5
   },
   {
    "id": 4,
-   "a": 0.4,
-   "b": 0.2,
-   "c": 1.0,
+   "restitution": 0.4,
+   "friction": 0.2,
+   "grip": 1.0,
    "d": 0.1
   },
   {
    "id": 5,
-   "a": 0.2,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 6,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 7,
-   "a": 0.25,
-   "b": 0.7,
-   "c": 1.0,
+   "restitution": 0.25,
+   "friction": 0.7,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 8,
-   "a": 0.2,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 9,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 10,
-   "a": 0.1,
-   "b": 0.8,
-   "c": 1.0,
+   "restitution": 0.1,
+   "friction": 0.8,
+   "grip": 1.0,
    "d": 0.3
   },
   {
    "id": 11,
-   "a": 0.15,
-   "b": 0.3,
-   "c": 0.0,
+   "restitution": 0.15,
+   "friction": 0.3,
+   "grip": 0.0,
    "d": 1.0
   },
   {
    "id": 12,
-   "a": 0.8,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.8,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 13,
-   "a": 0.2,
-   "b": 0.8,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.8,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 14,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 15,
-   "a": 0.2,
-   "b": 0.9,
-   "c": 1.1,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.1,
    "d": 1.0
   },
   {
    "id": 16,
-   "a": 0.6,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.6,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 17,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 0.8,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 0.8,
    "d": 1.0
   },
   {
    "id": 18,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 19,
-   "a": 0.0,
-   "b": 0.0,
-   "c": 0.0,
+   "restitution": 0.0,
+   "friction": 0.0,
+   "grip": 0.0,
    "d": 0.0
   },
   {
    "id": 20,
-   "a": 0.4,
-   "b": 0.3,
-   "c": 1.0,
+   "restitution": 0.4,
+   "friction": 0.3,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 21,
-   "a": 0.95,
-   "b": 0.3,
-   "c": 0.1,
+   "restitution": 0.95,
+   "friction": 0.3,
+   "grip": 0.1,
    "d": 1.0
   },
   {
    "id": 22,
-   "a": 0.2,
-   "b": 0.7,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.7,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 23,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 24,
-   "a": 0.65,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 25,
-   "a": 0.65,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 26,
-   "a": 0.1,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.1,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 27,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 28,
-   "a": 0.01,
-   "b": 0.35,
-   "c": 1.0,
+   "restitution": 0.01,
+   "friction": 0.35,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 29,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 30,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 31,
-   "a": 0.01,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.01,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 32,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.1,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.1,
    "d": 0.5
   },
   {
    "id": 33,
-   "a": 0.4,
-   "b": 0.2,
-   "c": 1.0,
+   "restitution": 0.4,
+   "friction": 0.2,
+   "grip": 1.0,
    "d": 0.1
   },
   {
    "id": 34,
-   "a": 0.2,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 35,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 36,
-   "a": 0.25,
-   "b": 0.7,
-   "c": 1.0,
+   "restitution": 0.25,
+   "friction": 0.7,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 37,
-   "a": 0.2,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 38,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 39,
-   "a": 0.1,
-   "b": 0.8,
-   "c": 1.0,
+   "restitution": 0.1,
+   "friction": 0.8,
+   "grip": 1.0,
    "d": 0.3
   },
   {
    "id": 40,
-   "a": 0.65,
-   "b": 0.35,
-   "c": 1.0,
+   "restitution": 0.65,
+   "friction": 0.35,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 41,
-   "a": 0.8,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.8,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 42,
-   "a": 0.2,
-   "b": 0.8,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.8,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 43,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 44,
-   "a": 0.2,
-   "b": 0.9,
-   "c": 1.1,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.1,
    "d": 1.0
   },
   {
    "id": 45,
-   "a": 0.6,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.6,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 46,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 0.8,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 0.8,
    "d": 1.0
   },
   {
    "id": 47,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 48,
-   "a": 0.0,
-   "b": 0.0,
-   "c": 0.0,
+   "restitution": 0.0,
+   "friction": 0.0,
+   "grip": 0.0,
    "d": 0.0
   },
   {
    "id": 49,
-   "a": 0.4,
-   "b": 0.3,
-   "c": 1.0,
+   "restitution": 0.4,
+   "friction": 0.3,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 50,
-   "a": 0.95,
-   "b": 0.3,
-   "c": 0.1,
+   "restitution": 0.95,
+   "friction": 0.3,
+   "grip": 0.1,
    "d": 1.0
   },
   {
    "id": 51,
-   "a": 0.2,
-   "b": 0.7,
-   "c": 1.0,
+   "restitution": 0.2,
+   "friction": 0.7,
+   "grip": 1.0,
    "d": 0.5
   },
   {
    "id": 52,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 53,
-   "a": 0.65,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 54,
-   "a": 0.65,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 55,
-   "a": 0.1,
-   "b": 0.9,
-   "c": 1.0,
+   "restitution": 0.1,
+   "friction": 0.9,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 56,
-   "a": 0.55,
-   "b": 0.84,
-   "c": 1.0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
    "d": 1.0
   },
   {
    "id": 57,
-   "a": 0.01,
-   "b": 0.35,
-   "c": 1.0,
+   "restitution": 0.01,
+   "friction": 0.35,
+   "grip": 1.0,
    "d": 1.0
   }
  ]

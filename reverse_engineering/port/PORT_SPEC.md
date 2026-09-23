@@ -11,12 +11,12 @@ implement directly.
 | `PORT_AUDIT.md` | Checklist of every gameplay system with its verification status and open items |
 | `AI_SPEC.md` | Tank AI (scheduler, perception, targeting, roles, navigation, firing) and the controls |
 | `LEVEL_FORMAT.md` | `.LVL` entity records and every entity type's properties |
-| `physics_materials.json` | The 58 collision-surface materials from `.data 0x24c7c0` |
+| `physics_materials.json` | The 58 contact materials (restitution, friction, grip) from `.data 0x24c7c0` |
 | `bzpsp_constants.json` | 72 constants from the code, each with unit, `BOOT.BIN` address, PPSSPP address and evidence |
 | `port_tables.json` | Shipped data tables (tank motion, tweaks, 39 weapons, 34 projectiles) normalized to snake_case JSON |
-| `reference/` | C++17 reference implementation (tank drive/hover, damage, projectiles, match rules) with tests |
+| `reference/` | C++17 reference implementation (tank drive/hover, damage, projectiles, collisions, match rules) with tests |
 | `validation/` | Runs the game's own functions from `BOOT.BIN` under a CPU emulator and records golden traces |
-| `golden/` | Recorded traces: 1,809 tank ticks and 37 damage hits the reference must reproduce |
+| `golden/` | Recorded traces: 1,809 tank ticks, 37 damage hits and 72 contact impulses the reference must reproduce |
 
 Regenerate `port_tables.json` from your own extraction:
 
@@ -316,7 +316,7 @@ Every projectile class (the vtables at `0x255b24`…`0x255c8c`) and its per-upda
 | 0 bullet | `0x7950` | moves `velocity` m per update and hit-tests the segment (§4.1) |
 | 2 missile | `0xb998` | steers, then moves like a bullet (§4.1) |
 | 4 hitscan | `0x9ed0` | **one** ray from the muzzle, **`velocity` metres long** (1000 m for Rail, Fusion and KGB; 150 m for NOD; 500 m for the ray specials). Hits the collision world or the first tank; the projectile ends after this single update |
-| 1 explosive | `0x98e8` | a **physics body**: a 2 m sphere launched at `at × speed` (`0x93a0`). Its own gravity is **−240 m/s² for the Mortar (id 18)** and −20 m/s² otherwise (Mines, id 11). Mortar and id 10 add the shooter's speed (id 10 twice). It bounces through the physics engine and explodes with linear splash (the detonation trigger is in the physics callbacks and isn't traced) |
+| 1 explosive | `0x98e8` | a **physics body**: a 2 m sphere launched at `at × speed` (`0x93a0`). Its own gravity is **−240 m/s² for the Mortar (id 18)** and −20 m/s² otherwise (Mines, id 11). Mortar and id 10 add the shooter's speed (id 10 twice). It bounces through the physics engine and explodes with linear splash. It arms after 0.5 s (id 10), 1 s (Mines) or 0.15 s (Mortar); the Mortar explodes on hitting the ground, and armed shells explode on touching a tank (§4.6) |
 | 5 sonic cone | `0xbe9c` | **once**: every tank in front of the muzzle within `assist_max_dist` of the *weapon* row and within ±`assist_hdg` degrees horizontally takes the damage (the cone reuses the weapon's aim-assist columns) |
 | 6 sphere burst | `0xc2cc` | **once**: every tank within `explod_radius` + the Splash tweak takes the damage (no falloff) |
 
@@ -392,7 +392,12 @@ offset in the tank's frame (x, y, z) plus a pitch in degrees.
 Each frame the camera moves by `rand(−2..2)·mag` in local x and y. A bigger shake replaces a
 smaller one. Death shakes use the motion table's death shake columns.
 
-### 4.6 Physics world (code: `PhysicsEngine.cpp` `0x4f9b0`, `0x4fd98`, `0x4ff4c`)
+### 4.6 Physics world and collisions (code: `PhysicsEngine.cpp` `0x4f9b0`, `0x4fd98`, `0x4ff4c`; solver `0x11b658`)
+
+`reference/bzpsp_collision.cpp` implements this section. Its impulse is checked against the
+game's own code (`golden/contact_traces.txt`, §8.1).
+
+#### Timing and bodies
 
 - **Fixed 60 Hz physics.** Each frame's dt (clamped to 1/15 s) is added to an accumulator, and
   the solver steps **1/60 s** while the accumulator is positive (`0x4fd98`). At 30 fps that's
@@ -400,13 +405,16 @@ smaller one. Death shakes use the motion table's death shake columns.
   use a 1/60 substep for the tank bodies, or integrate twice per 30 Hz tick.
 - **Bodies** (`0x4ff4c`):
   - **Tank:** mass 100, inertia 300, gravity (0, −30, 0), collision group 1 (`0x8f830`).
-  - **Everything else** (doors, breakables, dispensers, explosive shells): group 6, default
-    gravity −9.8 unless overridden (shells: −20, Mortar −240).
-- **Collision groups** (`0x4f9b0`): 7 groups with a pair table (collide = 2, ignore = 0):
+  - **Everything else** (doors, breakables, dispensers, sentinels, mode objects, explosive
+    shells): group 6, mass 2 (breakables 0.2), default gravity −9.8 unless overridden (shells:
+    −20, Mortar −240). Doors appear to be made immovable (body flag `0x20`, `0xe1244`).
+- **Collision groups** (`0x4f9b0`, table at `world +0x218`): 0 = don't test, 2 = full contact.
+  The library also supports 1 (report to the pre-collide callback only, no response), but no
+  pair uses it. Group 0 is the static world.
 
 | | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|---|
-| **0** | – | ✓ | ✓ | ✓ | – | ✓ | ✓ |
+| **0** world | – | ✓ | ✓ | ✓ | – | ✓ | ✓ |
 | **1** tank | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | **2** | | | – | – | – | – | – |
 | **3** | | | | – | – | – | – |
@@ -414,12 +422,190 @@ smaller one. Death shakes use the motion table's death shake columns.
 | **5** | | | | | | ✓ | – |
 | **6** objects | | | | | | | ✓ |
 
-- **World collision:** against the level's `_coll.rws` mesh. Each triangle carries a material id.
-  Contact parameters come from 58 materials (`physics_materials.json`, from `.data 0x24c7c0`).
-  The raycast callback also reports the material (`bdInt.attr`), which the hover probe records.
-- **Not transcribed:** the solver itself (the `0x10xxxx`–`0x13xxxx` library). A port should use
-  the engine's physics with these masses, gravities, groups and materials. The tank's feel comes
-  from the drive and hover code (§3), which is exact.
+  Only groups 1 and 6 are used, so in practice **everything collides with everything**: tanks
+  with the world, with each other and with every object.
+
+#### Collision shapes
+
+A body's shape is a list of primitives, 0x60 bytes each: `+0x00` size (sphere radius, or box
+extents x, y, z), `+0x10` local matrix, `+0x50` flags (low byte = type: 0 box, 2 sphere;
+bits 8–15 = material id; bit 31 = disabled). When a body has more than one primitive, the first
+is a bounding sphere, and it's skipped by the contact tests.
+
+- **Tank** (`0x8f464`, the same for all sizes): five colliding spheres of **radius 2.5 m**, all
+  **material 11**, in tank-local space (x left, y up, z forward):
+
+  | Sphere | Centre (m) |
+  |---|---|
+  | front left, front right | (±3, 0.5, 5) |
+  | rear left, rear right | (±3, 0.5, −5) |
+  | top | (0, 1.2, 0) |
+
+  The bounding sphere is at the origin with radius √34 + 2.5 ≈ 8.33 m. The four corners come from
+  `.data 0x24e064`; their y is set to 0.5 the first time a tank is built.
+- **Door** (`0x298f4`): one box, sizes (24, 13.25, 1.5) from the door table (`.data 0x24b718`
+  `+4..+0xc`), material 0. Whether these are full or half extents isn't traced; compare them with
+  the door model.
+- **Other objects** appear to take their primitives from the model's collision proxy
+  (`0x77134`, types 0/1/2).
+
+#### World contacts (the live path)
+
+The library has two ways to collide against the level. `.data 0x24c790` selects one. It is 1 in
+the data and nothing writes it, so the game always uses the RenderWare path below. The "THD v3.0"
+HOTS tree and Proxy loaders (`0x50128`, `0x502f4`) have no callers and are dead code.
+
+For each colliding sphere of a body (`0x121280`):
+
+1. Query the level's **`<terrain>_coll.rws`** collision world with an intersection sphere
+   (`RpCollisionWorldForAllIntersections`, `0x1df614`).
+2. For each triangle (`0x120ff0`), find the closest point: the projection onto the plane if it
+   falls inside the triangle, otherwise the nearest point on its three edges. Keep the closest
+   triangle.
+3. The penetration depth is `radius − distance`.
+
+The **deepest sphere wins: one world contact per body per step.** The contact normal is the
+chosen **triangle's face normal**, and the contact point is its closest point.
+
+On this path the world side's material is always **0**, whatever the triangle's material. The
+per-triangle material only reaches the game through the hover raycast (`bdInt.attr`, §3.2).
+
+#### Body–body contacts
+
+- **Broadphase:** bounding boxes must overlap, and the group pair must be non-zero (`0xdf0b4`).
+- **Narrowphase** (`0xe594c`): every pair of non-disabled primitives is tested with the
+  sphere/box routines (`0xe48e8`). The deepest pair gives the **one contact** for the two bodies,
+  with the two primitives' materials.
+
+#### Contact filtering and game callbacks
+
+A contact is dropped when it has no points, its depth is ≤ 1e-5, or **either material is 19**
+(`0x11b844`). Otherwise:
+
+1. **Pre-collide** (game `0x3ee94`, registered at `world +0x204`) runs with `(A, B)`, dispatched on
+   **A's** type. It runs only when one of the two bodies has the callback flag. It returns
+   **10** to resolve the contact, and any other value (the game uses **9**) ignores it: no
+   impulse, no push-out. Game rules are below.
+2. **Response** (below).
+3. **Post-collide** (game `0x3f01c`, `world +0x208`) runs after the response.
+
+#### Response (`0x11b658` → `0x1461cc` → `0x137c40` → `0x13661c`)
+
+1. **Coefficients.** The material table (`physics_materials.json`) holds, per material,
+   **a = restitution**, **b = friction** and **c = grip**. They combine per contact as:
+   - `μ = b_A · b_B`
+   - `e = a_A · a_B`
+   - `c = (c_A + c_B) / 2`
+
+   An invalid id uses (a, b, c) = (0.5, 0.77, 1.0). If a pre-collide callback changes a body's
+   material, the coefficients are recomputed.
+2. **Impulse** (`0x13661c`, **emulated**). The contact frame has z along the normal. `v` is the
+   relative velocity of the contact points (approaching means `v.z < 0`), and `K` is the
+   contact's 3×3 inverse-mass matrix (impulse to velocity change):
+
+   ```text
+   jn    = −v.z / K_zz                  normal impulse that just stops the approach
+   stick = −K⁻¹ v                       impulse that stops the contact point completely
+   d     = stick − (0, 0, jn)           its tangential remainder
+   P     = (1 + e)·jn·ẑ + c·d
+   if (μ·P.z)² < P.x² + P.y²:           outside the friction cone
+       s = |d.xy| − μ·d.z
+       P = |s| > 1e-5 ? (1 + e)·jn·ẑ + (μ(1 + e)·jn / s)·d : 0
+   ```
+
+   `c` scales how much of the sliding is stopped: 0 gives a frictionless contact, 1 stops it up
+   to the Coulomb limit `μ`. `P` is applied at the contact point to both bodies, equal and
+   opposite, linear and angular. `K` is the usual two-body contact matrix; the library builds it
+   in `0x137c40`.
+3. **Resting contact.** The library compares the speed change with `4·√(0.02·|g|)`, where `g` is
+   the world's gravity vector (world `+0`). Below it the contact counts as resting (the library
+   may put the bodies to sleep); above it, both bodies are woken. The exact sleep rules aren't
+   traced.
+4. **Push-out** (`0x145b2c`). The push is `depth · normal`, **clamped to 1 m**. The bodies share it
+   by mass: A moves by `push · m_B/(m_A + m_B)` and B by `−push · m_A/(m_A + m_B)`.
+   - A body that isn't an awake dynamic body (the world, a door, a sleeping body) counts as
+     mass 1e16, so it doesn't move.
+   - When both bodies are awake and one is a **tank**, the tank counts as immovable (A is checked
+     first). A tank shoves other objects out of itself, and in a tank–tank contact only body B is
+     pushed.
+
+What a tank gets from this:
+
+| Contact | μ | e | c | Effect |
+|---|---:|---:|---:|---|
+| Tank vs world, door (materials 11 + 0) | 0.252 | 0.0825 | 0.5 | nearly dead bounce; half the sliding is stopped, capped at μ = 0.25 |
+| Tank vs tank (11 + 11) | 0.09 | 0.0225 | 0 | **frictionless** normal push, almost no bounce |
+
+#### Game rules on contact (code)
+
+Pre-collide on a **tank** (`0x94014`) against:
+
+- **Another tank:** returns 10 (normal contact).
+- **A breakable:** `ratio = |forward speed| / max forward speed`. The breakable takes damage when
+  `ratio > 0.5`, or it has under 5 hp, or the tank is **AI-driven** (controller `+0x7c`, set only
+  for human players). The damage is `min(ratio, 1.5) × 100`, **+1000 for AI tanks**, so AI always
+  ploughs through. Once destroyed, the breakable returns 9 and the tank passes through. It then
+  ignores ram damage for 0.75 s (`0x25024`).
+- **A projectile:** see the explosive-shell rules below.
+- **A mode object** (`0x30c68`, the `fieldglow` objects created at `0x30744`): returns 9 (pass
+  through) when the object's owner value (`+0xd0`) matches the tank's (tank vtable `+0x54`,
+  presumably the team), and 10 otherwise. Either way the object plays its glow for 0.5 s.
+
+Post-collide on a **tank** (`0x93d20`):
+
+- **Hit flags:** it sets "hit the world" (`+0x978`) or "hit a tank" (`+0x97c`).
+- **Ramming another tank** (checked in this order):
+  - **Super Ram active** (`+0x944`, the forced nitro): the other tank takes **10000 damage** (a
+    kill) and an impact of `tank +0x594` along the rammer's forward.
+  - **Otherwise,** when the rammer's slot-0 object (`+0x1c4`) is active and its cooldown
+    (`+0x30`) is over, and the other tank is in front: the other tank takes `slot+0x294 × s`
+    damage, a hull flash, and an impact of `slot+0x29c × s` along the rammer's forward. Here
+    `s = min(0.75 × forward speed / max forward speed, 1.5)`. The cooldown then restarts from
+    `slot+0x2c`.
+    - "In front" (`0x1071c`): with `dir` the unit vector from the rammer to the other tank,
+      `|dot(right, dir)| < 0.9` and `dot(at, dir) ≥ 0`.
+    - "Active" is slot vtable `+0x34` = `0x106b8`: `+0x24` set and `+0x28c` clear. This object's
+      activation shows the `FXSuperram_Ram` effect.
+- **Doors:** a door in state 3 (**closing**) deals **10000 damage** to a tank touching it, from
+  either side's callback (`0x2aaac`, `0x2aa1c`).
+- **Impact sound** (`0x91fe4`): when the vector the solver passes (its length, probably the
+  contact impulse) divided by 100 exceeds 2, and more than 0.5 s has passed since the last one,
+  one of 3 impact sounds plays. Its volume is `0.1 + 0.2·min(x/40, 1)`.
+
+**Explosive shells** (Mortar id 18, Mines id 11, id 10; `0x9ca8` on the shell, `0x9dc0` on the
+tank):
+
+- **Arm time** (`0x99a0`): id 10 0.5 s, Mines 1.0 s, Mortar 0.15 s, counted on the shell's age
+  (`+0x14`).
+- **Against the world:** the **Mortar explodes on impact** (even before it arms). Other shells
+  bounce with the normal response.
+- **Against an object before arming:** ignored (9). The shell passes through everything,
+  including its owner.
+- **Against an object once armed:** it explodes when the object is a **tank** (any tank,
+  including the owner), or on any object for the Mortar. The contact is ignored either way.
+- **Mines:** each weapon keeps its last **3** live mines (`weapon +0x230`). Laying a fourth
+  detonates the oldest (`0xddd0`).
+
+#### Porting
+
+- **Collision geometry.** Use `<terrain>_coll.rws` as the level's complex collision, and give
+  each tank the five 2.5 m spheres above (250 cm in Unreal).
+- **Faithful response.** Run your own contact step per 1/60 substep instead of the engine's
+  solver:
+  1. Take the deepest sphere-versus-world contact per tank, with the triangle's normal.
+  2. Take the deepest sphere pair per tank–object or tank–tank pair.
+  3. Call the pre-collide rules.
+  4. Apply `contactImpulse` at the contact point.
+  5. Apply `separate`.
+  6. Call the post-collide rules.
+
+  This reproduces the game's contact model exactly. The one approximated part is the library's
+  sleep handling.
+- **Engine physics.** With Chaos or PhysX, set a physical material per body with the combined
+  values from the table above: combine mode *Multiply* for friction and restitution, tank
+  friction 0.3 and restitution 0.15, world 0.84 and 0.55. The grip factor `c` has no engine
+  equivalent; it is what makes tank–tank contacts frictionless. Expect bounces and slides to be
+  close but not identical.
 
 ## 5. Match rules
 
@@ -559,6 +745,7 @@ instructions are interpreted following PPSSPP's register layout. A few calls are
 |---|---|---|---|
 | `tank_traces.py` | HoverTank drive `0x954a0` (with hover `0x94da0`) | idle, full throttle, reverse, held turn, strafe, nitro, slowed, 40 m drop, 30° tilt recovery, 20° slope climb; all sizes | 1,809 ticks; `driveStep` matches every tick within 1e-5 relative |
 | `damage_traces.py` | Vehicle::takeDamage `0x99be8` (with combo `0x98808`) | plain hits, both combos in and out of the 2 s window, mixed IDs, shield, armor, armor + shield, frozen, invulnerable, overkill | 37 hits; `takeDamage` matches every field |
+| `contact_traces.py` | Contact impulse `0x13661c` (friction, restitution, grip, friction cone) | tank–world and tank–tank material pairs on head-on, glancing and sliding hits, plus 60 random coefficient, velocity and inverse-mass cases | 72 contacts; `contactImpulse` matches within 1e-6 |
 
 `ctest` replays each recorded step from its `pre` state (`reference/test_golden.cpp`). Any change
 to the reference that departs from the game fails the build. The traces exposed three things the
@@ -589,12 +776,18 @@ mapping. Use the PPSSPP debugger (memory view and breakpoints) with a module bas
    then 375 (HP at `vehicle +0x20`).
 7. **Match rules**: in a 10-minute DM, tie at time-out. Expect 60 s of overtime (the limit at
    `GameType +0x30/+0x34`).
+8. **Collisions**: break at the contact impulse (`0x0893a61c`) and drive into a wall, then into
+   another tank. Expect `$f12`/`$f13`/`$f14` (μ, e, c) = 0.252/0.0825/0.5 against the wall and
+   0.09/0.0225/0 against the tank (§4.6). Log the tank's `pos` on consecutive frames to see
+   the push-out, which is at most 1 m per step.
 
 ## 9. Known uncertainties
 
-- **Collision response** comes from the physics library (`0x119060` and its callees). It isn't
-  transcribed, so bounces, wall slides and tank-on-tank pushes will differ. The hover and drive
-  logic that decides how the tank *feels* is exact.
+- **Collision response** is specified in §4.6: the shapes, the contact selection, the material
+  coefficients, the impulse (emulated) and the push-out. Not traced: the library's sleep
+  handling, the exact build of the two-body `K` matrix (`0x137c40`), and how multiple bodies'
+  contacts are ordered within a step. Expect near-identical single contacts, and small drift in
+  piles of simultaneous contacts.
 - **The 30 fps assumption.** The code is variable-dt, but projectiles and several timers are
   per-update, so behavior at other frame rates differs. Validate step 1 in §8.2.
 - **Scripted steering** (input `+0x10c`, a direction at input `+0x170…`) isn't modeled. It

@@ -19,13 +19,13 @@ spec is. It assumes the assets (models, textures, terrain, audio, movies, CSV ta
 | 2 | Units, axes, stick sign | 🟢 | §2, `AI_SPEC.md` §8 | BZ98R handedness only |
 | 3 | Hover suspension + drive model + nitro | ✅ | §3, `reference/bzpsp_tank.cpp`, `golden/tank_traces.txt` | — (1,809 ticks match) |
 | 4 | Tank rigid body (mass, inertia, gravity, impulses) | 🟢 | §3.1, §4.6 | — |
-| 5 | Collision solver (bounces, slides, tank-on-tank) | 🟡 | §4.6, `physics_materials.json` | Solver not transcribed; use Unreal physics with the given masses, groups and materials |
-| 6 | Collision world | 🟢 (data) | `LEVEL_FORMAT.md` §1 | Use `<terrain>_coll.rws`, not the render mesh |
+| 5 | Collision response (bounces, slides, push-out, tank-on-tank) | 🟢 (impulse ✅) | §4.6, `reference/bzpsp_collision.cpp`, `golden/contact_traces.txt` | Impulse emulated (72 contacts match). Library sleep rules and the two-body `K` build not traced |
+| 6 | Collision world and shapes | 🟢 | §4.6, `LEVEL_FORMAT.md` §1 | Use `<terrain>_coll.rws`; tank = 5 spheres of 2.5 m. Door box extents (full or half) and other objects' proxy shapes unconfirmed |
 | 7 | Damage, combos, shield, armor, freeze | ✅ | §4.2, `golden/damage_traces.txt` | — (37 hits match) |
 | 8 | Splash, knockback, vampire, burn/freeze on hit | 🟢 | §4.1, §4.3 | — |
 | 9 | Weapon firing (cooldown, auto, burst, hold-charge, aim assist, spread, lock-on) | 🟢 | §4.1a | Target cone for lock-on (`0xe650`) summarised |
 | 10 | Projectiles: bullet, missile, hitscan, cone, sphere | 🟢 | §4.1, §4.3 | — |
-| 11 | Projectiles: mortar and mines (physics bodies) | 🟡 | §4.3 | Detonation trigger in the physics callback |
+| 11 | Projectiles: mortar and mines (physics bodies) | 🟢 | §4.3, §4.6 | — (arm times, detonation rules, 3-mine limit) |
 | 12 | Weapon and projectile data | 🟢 (data) | `port_tables.json` | — |
 | 13 | Tweaks (enhancements) | 🟢 | `PSP_GAME_CODE.md` §8 | — |
 | 14 | Pickups, dispensers, jump pads | 🟢 | §4.4, `LEVEL_FORMAT.md` | — |
@@ -50,14 +50,16 @@ spec is. It assumes the assets (models, textures, terrain, audio, movies, CSV ta
 | 33 | Audio (music, SFX banks, 3D sound) | 🔴 | — | Trigger points are visible in code (`audio_psp.cpp`) but not mapped |
 | 34 | Multiplayer (ad hoc lockstep) | 🟡 | `PSP_GAME_CODE.md` §10 | Only the architecture; not needed for a single-player port |
 | 35 | Cheats | 🟢 | `PSP_GAME_CODE.md` §9 | How they're unlocked |
+| 36 | Contact rules: ramming, breakables, crushing doors, impact sounds | 🟢 | §4.6 | Slot-0 ram object's damage and impulse values (`+0x294`, `+0x29c`) not traced to their table |
 
 ## What you can build now
 
 The core loop, meaning driving, shooting, taking damage and dying, is specified exactly, and its
-two hardest parts (movement and damage) are proven against the game's own code. Match rules, AI,
-levels, controls and camera are specified from the code with the formulas and constants you need.
-The biggest remaining risk to faithful feel is item 5 (collision response), because the physics
-library isn't transcribed.
+two hardest parts (movement and damage) are proven against the game's own code, along with the
+collision impulse. Match rules, AI, levels, controls and camera are specified from the code with
+the formulas and constants you need. The remaining risk to faithful feel is the part of the
+physics library not traced: its sleep rules, and how several simultaneous contacts are ordered
+within a step.
 
 ## Suggested next verifications
 

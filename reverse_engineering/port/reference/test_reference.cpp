@@ -1,5 +1,6 @@
 // Behaviour checks for the reference implementation. Build:
 //   g++ -std=c++17 -O2 -o test_reference test_reference.cpp bzpsp_tank.cpp bzpsp_combat.cpp bzpsp_match.cpp
+//       bzpsp_collision.cpp
 // Each check prints the measured value next to the value derived from the PSP code/data.
 #include <cmath>
 #include <cstdio>
@@ -118,6 +119,28 @@ int main() {
         check("KO: next 100 destroys the core", float(killed), 1, 0);
         core.heal(10 * kKoPadRatio);
         check("KO: one pad tick revives with 20 hp", core.health, 20, 0);
+    }
+
+    // Collisions (PORT_SPEC.md §4.6)
+    {
+        const PhysMaterial world{0.55f, 0.84f, 1.0f}, tank{0.15f, 0.3f, 0.0f};  // ids 0 and 11
+        ContactCoeffs tw = combineMaterials(tank, world), tt = combineMaterials(tank, tank);
+        check("tank-world friction mu", tw.mu, 0.252f, 1e-6f);
+        check("tank-world restitution e", tw.e, 0.0825f, 1e-6f);
+        check("tank-world grip c", tw.c, 0.5f, 0);
+        check("tank-tank grip c (frictionless)", tt.c, 0.0f, 0);
+        Separation s = separate(3.0f, {0, 1, 0}, 100, 100, true, false, true, false);
+        check("push-out clamped to 1 m (tank vs world)", s.moveA.y, 1.0f, 1e-6f);
+        s = separate(0.5f, {1, 0, 0}, 100, 2, true, true, true, false);
+        check("tank shoves an awake object, not itself", s.moveB.x, -0.5f, 1e-6f);
+        check("... and doesn't move", s.moveA.x, 0.0f, 0);
+        check("AI tank breaks a breakable at rest", breakableRamDamage(0, 70, false, 100), 1000, 0);
+        check("human needs > half speed", breakableRamDamage(30, 70, true, 100), 0, 0);
+        check("ram scale caps at 1.5", ramScale(200, 70), 1.5f, 0);
+        ExplosiveContact early = explosiveContact(11, 0.5f, false, true);
+        check("mine not armed at 0.5 s: no detonation", float(early.detonate), 0, 0);
+        ExplosiveContact mortar = explosiveContact(18, 0.0f, true, false);
+        check("mortar explodes on the ground at once", float(mortar.detonate), 1, 0);
     }
 
     std::printf("\n%d failure(s)\n", g_failures);

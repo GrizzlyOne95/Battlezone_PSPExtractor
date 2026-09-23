@@ -281,4 +281,70 @@ struct KoCore {
 };
 constexpr float kKoPadRadius = 20.0f, kKoPadTick = 1.0f, kKoPadCost = 10.0f, kKoPadRatio = 2.0f;
 
+// ---------------------------------------------------------------------------------------------
+// Collisions (physics library contact path 0x11b844/0x11b980 -> 0x11b658 -> 0x1461cc, and the
+// game's contact callbacks 0x3ee94/0x3f01c). See PORT_SPEC.md §4.6.
+
+// One row of the material table (.data 0x24c7c0, 58 rows x 0x18 bytes; physics_materials.json
+// restitution, friction, grip). The world side of every world contact is material 0; tank
+// spheres are 11.
+struct PhysMaterial { float restitution, friction, grip; };
+constexpr PhysMaterial kFallbackMaterial{0.5f, 0.77f, 1.0f};  // invalid id (0x4efdc)
+constexpr int kWorldMaterial = 0, kTankSphereMaterial = 11;
+constexpr int kNoContactMaterial = 19;  // 0x11b844: a contact touching material 19 is dropped
+
+// Per-contact coefficients (0x11b658): mu and e multiply, the grip factor averages.
+struct ContactCoeffs { float mu, e, c; };
+ContactCoeffs combineMaterials(const PhysMaterial& a, const PhysMaterial& b);
+
+// 3x3 matrix as RenderWare rows; mulRow(v) = v.x*r[0] + v.y*r[1] + v.z*r[2] (0x1b5df4).
+struct Mat3 {
+    Vec3 r[3];
+    Vec3 mulRow(const Vec3& v) const { return r[0] * v.x + r[1] * v.y + r[2] * v.z; }
+};
+
+// Impulse for one contact in the contact frame (z = normal pointing from B to A) (0x13661c).
+// vRel: relative contact velocity (approaching => vRel.z < 0). K: the contact's inverse-mass
+// matrix (impulse -> velocity change); Kinv its inverse.
+Vec3 contactImpulse(const ContactCoeffs& k, const Vec3& vRel, const Mat3& K, const Mat3& Kinv);
+
+// Penetration push-out after the impulse (0x145b2c). The push is depth*normal, clamped to 1 m,
+// shared by mass: A moves by push*mB/(mA+mB), B by -push*mA/(mA+mB). A body that is not an
+// awake dynamic body counts as mass 1e16; when both are awake and one is a tank (group 1), that
+// tank (A first) is treated as immovable, so tanks shove other objects and a tank-tank pair
+// pushes only body B.
+struct Separation { Vec3 moveA, moveB; };
+Separation separate(float depth, const Vec3& normal, float massA, float massB, bool awakeA,
+                    bool awakeB, bool tankA, bool tankB);
+
+// Tank collision shape (0x8f464): 6 spheres of radius 2.5 in tank-local space. Sphere 0 is a
+// bounding sphere (radius sqrt(34) + 2.5) used only for culling; spheres 1-5 collide.
+struct CollisionSphere { Vec3 center; float radius; };
+constexpr int kTankSphereCount = 5;
+extern const CollisionSphere kTankSpheres[kTankSphereCount];
+constexpr float kTankBoundRadius = 5.8309519f + 2.5f;
+
+// Game contact rules (return value of the pre-collide callback: 10 = normal contact, 9 = ignore).
+constexpr int kContactRespond = 10, kContactIgnore = 9;
+constexpr float kCrushDamage = 10000.0f;  // closing door (0x2aaac), Super Ram hit (0x93d20)
+
+// Tank touching a breakable (0x94014): returns the damage to apply, or 0 for none. Human
+// tanks need forward speed > 0.5 x max or a breakable below 5 hp; AI tanks always break it.
+// The breakable ignores further ram damage for 0.75 s (0x25024).
+float breakableRamDamage(float fwdSpeed, float maxFwdSpeed, bool human, float breakableHp);
+
+// Tank A ramming tank B (0x93d20) while A's slot-0 object (+0x1c4) is active and charged
+// (vtable +0x34 = 0x106b8) and its cooldown is over: B takes slotDamage x scale and an impact of
+// slotImpulse x scale along A's forward, where scale = min(0.75 x fwdSpeed / maxFwdSpeed, 1.5).
+// B must be in front of A: |dot(A.right, dir)| < 0.9 and dot(A.at, dir) >= 0 (0x1071c).
+float ramScale(float fwdSpeed, float maxFwdSpeed);
+bool ramInFront(const Frame& rammer, const Vec3& targetPos);
+
+// Explosive shells (Mortar id 18, Mines id 11, id 10) touching something (0x9ca8 / 0x9dc0).
+// Arm time: id 10 0.5 s, id 11 1.0 s, id 18 0.15 s (0x99a0). Before it the shell passes
+// through every object, its owner included; the world always bounces it (Mortar: explodes).
+float explosiveArmTime(int projectileId);
+struct ExplosiveContact { bool detonate; int result; };
+ExplosiveContact explosiveContact(int projectileId, float age, bool otherIsWorld, bool otherIsTank);
+
 }  // namespace bzpsp

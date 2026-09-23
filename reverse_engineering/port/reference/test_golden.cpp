@@ -3,6 +3,7 @@
 //
 //   test_golden tank   <golden/tank_traces.txt>   [tolerance]   HoverTank drive 0x954a0
 //   test_golden damage <golden/damage_traces.txt> [tolerance]   Vehicle::takeDamage 0x99be8
+//   test_golden contact <golden/contact_traces.txt> [tolerance]  contact impulse 0x13661c
 //
 // Every step is replayed from its recorded `pre` state, so errors never accumulate: a field
 // that differs means the reference computes that step differently from the PSP code.
@@ -162,11 +163,59 @@ int runDamage(std::ifstream& file) {
     return bad ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+// ---- contact impulse traces ----
+int runContact(std::ifstream& file) {
+    int bad = 0, total = 0;
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::vector<std::string> parts;
+        for (size_t start = 0;;) {
+            size_t sep = line.find(" | ", start);
+            parts.push_back(line.substr(start, sep == std::string::npos ? std::string::npos : sep - start));
+            if (sep == std::string::npos) break;
+            start = sep + 3;
+        }
+        if (parts.size() != 5) { std::fprintf(stderr, "bad line: %s\n", line.c_str()); return 2; }
+        std::istringstream head(parts[0]);
+        std::string name;
+        ContactCoeffs k{};
+        head >> name >> k.mu >> k.e >> k.c;
+        std::vector<float> v = parseFloats(parts[1]), km = parseFloats(parts[2]),
+                           ki = parseFloats(parts[3]), want = parseFloats(parts[4]);
+        if (v.size() != 3 || km.size() != 9 || ki.size() != 9 || want.size() != 3) {
+            std::fprintf(stderr, "bad field count: %s\n", name.c_str());
+            return 2;
+        }
+        Mat3 K, Kinv;
+        for (int r = 0; r < 3; ++r) {
+            K.r[r] = {km[3 * r], km[3 * r + 1], km[3 * r + 2]};
+            Kinv.r[r] = {ki[3 * r], ki[3 * r + 1], ki[3 * r + 2]};
+        }
+        Vec3 p = contactImpulse(k, {v[0], v[1], v[2]}, K, Kinv);
+        const float got[3] = {p.x, p.y, p.z};
+        ++total;
+        std::string detail;
+        for (int i = 0; i < 3; ++i) {
+            if (close(got[i], want[i])) continue;
+            char buf[120];
+            std::snprintf(buf, sizeof buf, " P[%d] got %.6g want %.6g;", i, got[i], want[i]);
+            detail += buf;
+        }
+        if (!detail.empty()) {
+            ++bad;
+            std::printf("%-14s FAIL:%s\n", name.c_str(), detail.c_str());
+        }
+    }
+    std::printf("contact: %d contacts, %d mismatched\n", total, bad);
+    return bad ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::fprintf(stderr, "usage: test_golden tank|damage <traces.txt> [tolerance]\n");
+        std::fprintf(stderr, "usage: test_golden tank|damage|contact <traces.txt> [tolerance]\n");
         return 2;
     }
     const std::string mode = argv[1];
@@ -175,6 +224,7 @@ int main(int argc, char** argv) {
     std::ifstream file(path);
     if (!file) { std::fprintf(stderr, "cannot open %s\n", path); return 2; }
     if (mode == "damage") return runDamage(file);
+    if (mode == "contact") return runContact(file);
     if (mode != "tank") { std::fprintf(stderr, "unknown mode %s\n", mode.c_str()); return 2; }
 
     std::map<std::string, Stats> stats;

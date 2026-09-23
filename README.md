@@ -58,12 +58,13 @@ python scripts\build_port_tables.py --tables <data_tables_json or USRDIR\levelda
 ```
 
 - `reference/`: engine-neutral C++17 reference implementation with tests (`cmake -S reverse_engineering/port/reference -B build/ref`, then `ctest --test-dir build/ref`)
-- `validation/` + `golden/`: runs the game's own tank and damage functions from `BOOT.BIN` under
+- `validation/` + `golden/`: runs the game's own tank, damage and collision-impulse functions from `BOOT.BIN` under
   the Unicorn CPU emulator (`pip install unicorn`) and records traces the reference must match:
 
 ```powershell
 python reverse_engineering\port\validation\tank_traces.py
 python reverse_engineering\port\validation\damage_traces.py
+python reverse_engineering\port\validation\contact_traces.py
 ```
 
 ## Source Requirements
