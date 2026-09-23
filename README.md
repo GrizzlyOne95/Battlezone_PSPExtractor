@@ -55,7 +55,14 @@ Findings are documented in `reverse_engineering/PSP_GAME_CODE.md`.
 python scripts\build_port_tables.py --tables <data_tables_json or USRDIR\leveldata> --out port_tables.json
 ```
 
-- `reference/`: engine-neutral C++17 reference implementation with tests (`cmake -S reverse_engineering/port/reference -B build/ref`)
+- `reference/`: engine-neutral C++17 reference implementation with tests (`cmake -S reverse_engineering/port/reference -B build/ref`, then `ctest --test-dir build/ref`)
+- `validation/` + `golden/`: runs the game's own tank and damage functions from `BOOT.BIN` under
+  the Unicorn CPU emulator (`pip install unicorn`) and records traces the reference must match:
+
+```powershell
+python reverse_engineering\port\validation\tank_traces.py
+python reverse_engineering\port\validation\damage_traces.py
+```
 
 ## Source Requirements
 - Python 3.12+ on Windows

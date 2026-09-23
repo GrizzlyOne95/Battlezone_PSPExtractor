@@ -87,6 +87,7 @@ constexpr float kAngularDecay = 10.0f;          // w *= (1 - 10 dt)
 constexpr float kReverseSpeedScale = 0.75f;
 constexpr float kAirControl = 0.25f;
 constexpr float kNitroRefillPerSec = 0.125f;
+constexpr float kNitroOverspeedTime = 3.0f;    // 0x900b0: speed bleed window after a boost
 constexpr float kOutOfWorldY = -225.0f;
 constexpr float kHoverTorqueScale = 0.4f;
 const Vec3 kHoverProbes[4] = {{2, 0, 2}, {-2, 0, 2}, {2, 0, -2}, {-2, 0, -2}};  // .data 0x24e0ac
@@ -95,6 +96,8 @@ const Vec3 kHoverProbes[4] = {{2, 0, 2}, {-2, 0, 2}, {2, 0, -2}, {-2, 0, -2}};  
 // ---------------------------------------------------------------------------------------------
 // Hover tank
 
+// Not modeled: input +0x10c (scripted steering toward a direction at input +0x170..; it zeroes
+// throttle and strafe and stops nitro). Player and AI driving leave it 0.
 struct TankInput {
     float steer = 0;     // input +0x284, -1..1
     float throttle = 0;  // input +0x288, -1..1 (negative = reverse)
@@ -137,6 +140,9 @@ struct TankState {
 
 struct Impulse { Vec3 linear, angular; };  // what 0xe11bc receives (v += J/m, L += tau)
 
+// End a boost (0x900b0): disengage and open the 3 s window that bleeds excess speed.
+void stopNitro(TankState& t);
+
 // Initialize a tank at spawn (0x9326c): HP, energy, speed from the motion table + tweaks.
 void spawnTank(TankState& t, const TankMotion& m, float topSpeedBonus);
 
@@ -164,13 +170,15 @@ struct DamageState {
     float armorScale = 1;              // vehicle +0x78
     bool shieldActive = false;         // vehicle +0x60 (Armor pickup)
     float shieldHp = 0;                // vehicle +0x64
+    bool frozen = false;               // vehicle +0x150 (Canada Liquid Nitrogen, 0x9987c)
     // 3-hit combo tracker (0x98808): per bullet id 14 (Swarm) and 8 (Fusion)
     std::array<std::array<float, 3>, 2> comboTimes{};
     std::array<int, 2> comboCount{{0, 0}};
 };
 
 // Vehicle::takeDamage core (0x99be8 + 0x98808). `bulletId` is the projectile def id (or -1),
-// `now` the match clock. Returns the damage actually removed from HP; sets t.dead at <= 0.
+// `now` the match clock (GameType +0x2c). Returns the damage removed from HP (after combo,
+// armor and shield); sets t.dead at <= 0. Order: combo, armor scale, shield, frozen shatter.
 float takeDamage(TankState& t, DamageState& d, float damage, int bulletId, float now);
 
 // Linear splash falloff used by explosions (0x64e8): damage * (1 - dist/radius) inside radius.
@@ -191,7 +199,8 @@ struct Projectile {
     float lockTimer = 0;
 };
 
-// Spawn (0x7328): speed = velocity + 5% of shooter speed (random slow not modeled here).
+// Spawn (0x7328): speed = velocity + 5% of shooter speed. The rand_vel_slow term is
+// truncated to an int before use (0x74ac), so it is always 0 with the shipped tables.
 Projectile spawnProjectile(const ProjectileDef& def, const Frame& muzzle, float shooterSpeed,
                            float weaponDamageBonus, float weaponStealBonus);
 

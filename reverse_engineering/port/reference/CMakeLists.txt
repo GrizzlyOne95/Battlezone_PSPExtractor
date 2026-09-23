@@ -9,3 +9,12 @@ target_include_directories(bzpsp_reference PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_reference test_reference.cpp)
 target_link_libraries(test_reference PRIVATE bzpsp_reference)
+
+# Replays steps recorded from the game's own code (../validation/*_traces.py).
+add_executable(test_golden test_golden.cpp)
+target_link_libraries(test_golden PRIVATE bzpsp_reference)
+
+enable_testing()
+add_test(NAME behaviour COMMAND test_reference)
+add_test(NAME golden_tank COMMAND test_golden tank ${CMAKE_CURRENT_SOURCE_DIR}/../golden/tank_traces.txt)
+add_test(NAME golden_damage COMMAND test_golden damage ${CMAKE_CURRENT_SOURCE_DIR}/../golden/damage_traces.txt)

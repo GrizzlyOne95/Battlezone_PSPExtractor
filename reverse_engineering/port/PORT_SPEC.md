@@ -8,9 +8,11 @@ implement directly.
 | File | What it is |
 |---|---|
 | `PORT_SPEC.md` | This document: timing, units, per-tick algorithms, rules, engine notes, validation |
-| `bzpsp_constants.json` | 68 constants from the code, each with unit, `BOOT.BIN` address, PPSSPP address and evidence |
+| `bzpsp_constants.json` | 72 constants from the code, each with unit, `BOOT.BIN` address, PPSSPP address and evidence |
 | `port_tables.json` | Shipped data tables (tank motion, tweaks, 39 weapons, 34 projectiles) normalized to snake_case JSON |
 | `reference/` | C++17 reference implementation (tank drive/hover, damage, projectiles, match rules) with tests |
+| `validation/` | Runs the game's own functions from `BOOT.BIN` under a CPU emulator and records golden traces |
+| `golden/` | Recorded traces: 1,809 tank ticks and 37 damage hits the reference must reproduce |
 
 Regenerate `port_tables.json` from your own extraction:
 
@@ -22,12 +24,13 @@ Build and run the reference tests (any C++17 compiler):
 
 ```text
 cmake -S reverse_engineering/port/reference -B build/ref && cmake --build build/ref
-./build/ref/test_reference
+ctest --test-dir build/ref --output-on-failure
 ```
 
-Evidence levels used below. **Code** means read from the decompiled `BOOT.BIN`. **Data** means
-read from the shipped CSV tables or `.data`. **Inferred** means reasoned from code but not yet
-confirmed at runtime. Every address is a static VA in `BOOT.BIN` with load base 0. To get the
+Evidence levels used below. **Emulated** means the game's own code was executed and the
+reference reproduces its output (§8). **Code** means read from the decompiled `BOOT.BIN`.
+**Data** means read from the shipped CSV tables or `.data`. **Inferred** means reasoned from code
+but not yet confirmed. Every address is a static VA in `BOOT.BIN` with load base 0. To get the
 PPSSPP address, add the module base (`0x08804000` on a normal boot; check the module list in the
 PPSSPP debugger).
 
@@ -126,7 +129,8 @@ On the PSP, `HoverTank` drive (`0x954a0`) runs once per frame for each tank:
 5. Later in the frame, the physics library integrates every body with gravity `(0, −30, 0)` and
    resolves collisions.
 
-`reference/bzpsp_tank.cpp` (`driveStep`) does steps 1–4 exactly. `integrateBody` is a
+`reference/bzpsp_tank.cpp` (`driveStep`) does steps 1–4, and matches the game's own code on
+every emulated tick (§8.1). `integrateBody` is a
 minimal stand-in for step 5 (gravity plus explicit Euler, no collisions).
 
 ### 3.2 Hover suspension (`0x94da0`)
@@ -160,12 +164,14 @@ Inputs: `steer`, `throttle`, `strafe` in [−1, 1] and `boost` (input `+0x284/+0
    `turn = clamp(0.3·steer + 0.7·steer·ramp, −1, 1)`. When reversing, `turn *= (1 − throttle)`,
    so it can double.
 3. **Angular velocity** (skipped when dead):
-   `ω = ω·(1 − 10·dt) + R·(0, dt·turn·turnRate, 0) + R·(−2·dt·throttle, 0, 0)`, where `R` maps
-   local to world. The steady yaw rate is `turnRate / 10` rad/s: **2.1 / 1.9 / 1.7 rad/s**
-   (about 120 / 109 / 97 °/s).
+   `ω = ω·(1 − 10·dt) + R·(0, dt·turn·turnRate, 0) + R·(−2·dt·p, 0, 0)`, where `R` maps local to
+   world and `p` is the throttle, **or 1.5 while nitro is engaged and the tank is grounded**
+   (vtable `+0xcc`, `0x93b18`), which lifts the nose during a boost. The steady yaw rate is
+   `turnRate / 10` rad/s: **2.1 / 1.9 / 1.7 rad/s** (about 120 / 109 / 97 °/s).
 4. **Nitro.** Boosting requires `nitroEngaged && meter > 0 && boost`, or a forced boost such as
    Super Ram. Each tick the meter drains by `dt / nitroDuration`; while it's above 0,
-   `fwdAccel *= mult`, `maxSpeed *= mult` and `throttle = 1`. An empty meter disengages nitro.
+   `fwdAccel *= mult`, `maxSpeed *= mult` and `throttle = 1`. An empty meter stops the nitro
+   (`0x900b0`): `nitroEngaged = 0` and `nitroOverspeedTimer = 3 s`.
    While not engaged, the meter refills at 0.125/s (8 s from empty). The multiplier comes from
    the nitro weapon (IDs 19–21) plus the Nitro Boost tweak.
 5. **Gravity and downforce** (on top of the solver's 30 m/s²):
@@ -181,8 +187,8 @@ Inputs: `steer`, `throttle`, `strafe` in [−1, 1] and `boost` (input `+0x284/+0
 9. **Airborne** (and no nitro): both accelerations ×0.25.
 10. **Approach.** `dvF = dt·aF` and `dvS = dt·aS`. If the error `|v_local − target| / max` is
     below 0.2, scale by `error·5` so the speed eases in. If already faster than the target,
-    negate; when not braking (throttle ≥ 0), also halve it (coasting). After a boost ends,
-    `nitroOverspeedTimer` bleeds `nitroMult` per tick while the speed stays over the normal max.
+    negate; when not braking (throttle ≥ 0), also halve it (coasting). For 3 s after a boost
+    ends, `dvF -= nitroMult` each tick while last tick's forward speed is above `maxFwdSpeed`.
 11. `dv = R·(dvS, 0, dvF)`. If `tooSteep`, clamp `dv.y ≤ 0`. Then `v += dv` and write `v` back.
 12. `pos.y < −225` kills the tank (`takeDamage(10000)`).
 
@@ -207,12 +213,17 @@ tests reproduce these.
   only when positive. The projectile's damage is `def.damage + weapon[+0x248]`: **the Damage
   tweak is a flat bonus** (+10 major, +5 minor), not a percentage. Vampire adds to `steal_scale`
   (`weapon +0x24c`), and the Splash tweak adds meters to the radius (`weapon +0x244`).
+  `rand_vel_slow` is meant to subtract `velocity × random(0..rand_vel_slow)`, but the code
+  truncates it to an integer first (`trunc.w.s` at `0x74ac`). Every shipped value is below 1, so
+  the slowdown is always 0. The random number is still drawn, which matters only for
+  lockstep determinism.
 - **Motion** (`0x7950`): `pos += velPerUpdate` every update. The projectile expires when
   `age ≥ life_span` (seconds); explosives detonate on expiry.
 - **Missiles** (`0xb998`): no steering until `lock_delay` has passed. After that, the missile turns
   toward `targetPos + targetVel·dt` by at most `max_turn_rate · dt` degrees per update, then its
-  velocity is re-aligned with its new `at`. Lock-on range is at `weapon +0x1bc` (plus the Lock-on
-  tweak, +50/+25 m).
+  velocity is re-aligned with its new `at`. Steering happens before the move in the same update.
+  The missile drops its target when the target reports dead. Lock-on range is at
+  `weapon +0x1bc` (plus the Lock-on tweak, +50/+25 m).
 - **Pool sizes by type** (`ProjectileMgr`): 0 bullet 150, 1 explosive 40, 2 missile 75,
   3 nitro (none), 4 hitscan 20, 5 sonic cone 10, 6 sphere burst 10. A port can size its pools to
   match. What happens when a pool is full (drop the shot or recycle the oldest) isn't confirmed.
@@ -226,14 +237,18 @@ tests reproduce these.
 
 Order of evaluation for each hit:
 
-1. Ignore the hit if the target is invulnerable or dead.
+1. Ignore the hit if the target is invulnerable (`+0x2c`). `0x99be8` does **not** check for a
+   dead target, and hitting one runs the death handler again, so skip dead targets in the caller.
 2. **Combo**: Swarm (bullet 14) ×13 and A.E. Fusion (bullet 8) ×15 on the **third** hit, when each
    gap between consecutive hits is ≤ 2 s. If a gap is too long, the oldest hit is dropped and
    counting continues.
 3. **Germany Armor special**: `damage *= armorScale` (0.8).
-4. **Armor pickup shield** (150 hp): absorbs damage first. Any overflow passes through and ends
-   the shield.
-5. Subtract from HP. At ≤ 0 the tank dies.
+4. **Armor pickup shield** (150 hp): absorbs damage first. Any overflow passes through and turns
+   the shield off (its leftover hp value is left in place).
+5. **Frozen** (`+0x150`, set by Canada's Liquid Nitrogen, `0x9987c`): any positive damage first
+   sets HP to 0, so the hit shatters the tank. The frozen flag itself stays set.
+6. If damage > 0, reset the regen timer (`+0x28`). Subtract from HP. At ≤ 0 the HP is clamped to 0
+   and the tank dies (state 2, vtable `+0xbc`).
 
 **Splash** (`0x64e8`): `damage · (1 − d/R)` for `d < R`, and 0 outside. It's linear.
 
@@ -356,9 +371,37 @@ Approximate ODF mapping per size (small / medium / large):
 - Health regen, the 3-hit combos, pickups, jump pads and the six match modes all belong in the
   mission DLL. `reference/bzpsp_combat.cpp` and `bzpsp_match.cpp` are written to drop into one.
 
-## 8. Validation plan (PPSSPP)
+## 8. Validation
 
-Use the PPSSPP debugger (memory view and breakpoints) with a module base of `0x08804000`
+### 8.1 Golden traces from the game's own code (done)
+
+`validation/pspemu.py` loads `BOOT.BIN`, applies its relocations and runs game functions in
+Unicorn (`pip install unicorn`). Integer and FPU code runs natively. The PSP's VFPU vector
+instructions are interpreted following PPSSPP's register layout. A few calls are replaced:
+
+- **Rigid-body accessors:** replaced with the simple-body model the physics library implements
+  (`0x119060`): `v += J·(1/m)`, `L += τ`, `ω = I⁻¹L`.
+- **RenderWare point and vector transforms:** replaced.
+- **World raycast:** replaced with an analytic ground (flat or a 20° slope).
+- **Presentation calls** (audio, HUD, tint, messages): stubbed.
+
+| Script | Game function | Scenarios | Result |
+|---|---|---|---|
+| `tank_traces.py` | HoverTank drive `0x954a0` (with hover `0x94da0`) | idle, full throttle, reverse, held turn, strafe, nitro, slowed, 40 m drop, 30° tilt recovery, 20° slope climb; all sizes | 1,809 ticks; `driveStep` matches every tick within 1e-5 relative |
+| `damage_traces.py` | Vehicle::takeDamage `0x99be8` (with combo `0x98808`) | plain hits, both combos in and out of the 2 s window, mixed IDs, shield, armor, armor + shield, frozen, invulnerable, overkill | 37 hits; `takeDamage` matches every field |
+
+`ctest` replays each recorded step from its `pre` state (`reference/test_golden.cpp`). Any change
+to the reference that departs from the game fails the build. The traces exposed three things the
+hand transcription had missed: the 1.5 boost pitch, the 3 s overspeed timer and the damage-order
+details in §4.2. They are fixed in the reference.
+
+To extend it, add a scenario to one of the scripts, rerun it to regenerate `golden/`, and rerun
+`ctest`.
+
+### 8.2 Runtime checks in PPSSPP (still to do)
+
+These cover what emulating single functions can't: frame timing, the physics solver and input
+mapping. Use the PPSSPP debugger (memory view and breakpoints) with a module base of `0x08804000`
 (`ppsspp_address` in `bzpsp_constants.json` already includes it).
 
 1. **Frame rate and dt**: read `game +0x108c` (game pointer at `0x08a51d3c`) during a busy match.
@@ -383,9 +426,9 @@ Use the PPSSPP debugger (memory view and breakpoints) with a module base of `0x0
   transcribed, so bounces, wall slides and tank-on-tank pushes will differ. The hover and drive
   logic that decides how the tank *feels* is exact.
 - **The 30 fps assumption.** The code is variable-dt, but projectiles and several timers are
-  per-update, so behavior at other frame rates differs. Validate step 1 in §8.
-- **The special pitch state (1.5)** seen in the drive code and **`rand_vel_slow` units** are not yet
-  understood.
+  per-update, so behavior at other frame rates differs. Validate step 1 in §8.2.
+- **Scripted steering** (input `+0x10c`, a direction at input `+0x170…`) isn't modeled. It
+  zeroes throttle and strafe and stops nitro; player and AI driving don't use it.
 - **Hitscan and explosive `velocity` semantics** (§4.3).
 - **Stick sign convention** and **BZ98R handedness** (§2) need one runtime check each.
 - The shipped tables here are from the US disc. The EU disc's tables may differ; run

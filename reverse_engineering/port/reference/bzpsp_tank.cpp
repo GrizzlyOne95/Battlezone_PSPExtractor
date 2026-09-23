@@ -38,6 +38,11 @@ void Frame::orthonormalize() {
     up = cross(at, right);
 }
 
+void stopNitro(TankState& t) {
+    t.nitroEngaged = false;
+    t.nitroOverspeedTimer = k::kNitroOverspeedTime;
+}
+
 void spawnTank(TankState& t, const TankMotion& m, float topSpeedBonus) {
     t.hpMax = t.hp = m.hitPoints;
     t.energyMax = m.energyPoints;
@@ -132,9 +137,12 @@ void driveStep(TankState& t, const TankMotion& m, const TankInput& in, float dt,
     if (throttle < 0) turn *= (1.0f - throttle);
 
     // Angular velocity: decay 10/s, add yaw about local up and throttle pitch about local right.
+    // While nitro is engaged on the ground (vtable +0xcc, 0x93b18) the pitch input is a fixed
+    // 1.5 instead of the throttle, so the nose lifts during a boost.
+    float pitchIn = (t.nitroEngaged && !t.airborne) ? 1.5f : throttle;
     if (!t.dead) {
         Vec3 dYaw = f.localToWorld({0, dt * turn * turnRate, 0});
-        Vec3 dPitch = f.localToWorld({dt * throttle * -2.0f, 0, 0});
+        Vec3 dPitch = f.localToWorld({dt * pitchIn * -2.0f, 0, 0});
         t.angVel = t.angVel * (1.0f - dt * k::kAngularDecay) + dYaw + dPitch;
     }
 
@@ -150,7 +158,7 @@ void driveStep(TankState& t, const TankMotion& m, const TankInput& in, float dt,
             maxSpeed *= t.nitroMult;
             throttle = 1.0f;
         } else {
-            t.nitroEngaged = false;  // 0x900b0 stops the nitro
+            stopNitro(t);
         }
     }
     if (!t.nitroEngaged && t.nitroMeter < 1) {
