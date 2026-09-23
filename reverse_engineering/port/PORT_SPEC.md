@@ -233,6 +233,45 @@ tests reproduce these.
   model then pulls the tank back toward its target speed. That `force` is the projectile's
   `impact_force` column is inferred from the call sites.
 
+### 4.1a Weapon firing (code: `0xefc0` update, `0xdb80` press, `0xdc44` release, `0xd4a0` shoot)
+
+Each tank has a main gun and two side-weapon slots. The fields come from `BZ_WEAP_DEFS`
+(`port_tables.json → weapons`).
+
+- **Press (`0xdb80`):**
+  - Hold-charge weapons start charging.
+  - Otherwise, a non-auto weapon fires once if its cooldown is 0; a burst weapon starts a
+    burst instead.
+- **Held (`0xefc0`, every frame):** the cooldown counts down by dt. An auto-fire weapon
+  (`is_auto_fire`) fires again as soon as the cooldown reaches 0.
+- **Release (`0xdc44`), hold-charge weapons:** `charge = min(held, hold_charge_max_time) /
+  hold_charge_max_time`. If it was held longer than 1 s, the energy cost for this shot is
+  `energy_cost × held × 1.3`. Then it fires. The charge fraction scales the projectile through
+  `hold_charge_damage_scale` / `hold_charge_vel_scale`.
+- **Bursts** (`burst_cnt > 0`):
+  - **All at once** (`burst_delay == 0`): all shots fire this frame, each offset by
+    `burst_spread` degrees of heading (or `burst_offset` metres sideways).
+  - **Spaced:** otherwise one shot every `burst_delay` seconds until `burst_cnt`.
+- **Shooting one round (`0xd4a0`):**
+  1. If `energy < cost`, fail and show "not enough energy". Otherwise subtract the cost
+     from the tank's energy (the energy pool is the ammo).
+  2. Take the muzzle frame and level out its roll.
+  3. **Aim assist** (non-tracking weapons with `is_aim_assist`):
+     - pitch: turn toward the target when the pitch error is ≤ `assist_pit`
+     - heading: turn toward it when the error is ≤ `max(assist_hdg, 7°)`
+  4. Apply the burst offset. Then add random spread: a uniform integer in
+     ±`rand_fire_hdg_offset`° about up and ±`rand_fire_pitch_offset`° about right.
+  5. Spawn the projectile (`bullet_id`) from that frame (§4.1). Reset the cooldown to
+     `fire_delay`.
+  6. Semi-tracking weapons hand their current lock to the projectile.
+- **Lock-on** (`0xe650` picks the best target in the weapon's cone and `lock_on_range`):
+  - **Full tracking:** the same target must stay selected for `lock_delay` seconds.
+  - **Semi tracking:** locks on immediately.
+  - **Basic tracking:** only uses a target for aim assist.
+- **Team special** (`0x10834`): the charge meter rises at the special's rate while it isn't in
+  use. It's ready at the maximum, and drains while active. The Team Special tweak and the
+  fast-special cheat change the rate or duration (§4.4).
+
 ### 4.2 Damage (`0x99be8`, `0x98808`)
 
 Order of evaluation for each hit:
@@ -266,9 +305,26 @@ numbers at 30 Hz:
 | Homing Missile (7/update, 6 s) | 210 | 1,260 |
 | Swarm (6/update, 4 s) | 180 | 720 |
 
-For hitscan (type 4) and explosive/lobbed (type 1) shots, `velocity` is not used as a
-per-update step. Its meaning there (range, or launch speed under gravity) isn't transcribed yet;
-see §9.
+Every projectile class (the vtables at `0x255b24`…`0x255c8c`) and its per-update behaviour:
+
+| Type | Class update | Behaviour |
+|---|---|---|
+| 0 bullet | `0x7950` | moves `velocity` m per update and hit-tests the segment (§4.1) |
+| 2 missile | `0xb998` | steers, then moves like a bullet (§4.1) |
+| 4 hitscan | `0x9ed0` | **one** ray from the muzzle, **`velocity` metres long** (1000 m for Rail, Fusion and KGB; 150 m for NOD; 500 m for the ray specials). Hits the collision world or the first tank; the projectile ends after this single update |
+| 1 explosive | `0x98e8` | a **physics body**: a 2 m sphere launched at `at × speed` (`0x93a0`). Its own gravity is **−240 m/s² for the Mortar (id 18)** and −20 m/s² otherwise (Mines, id 11). Mortar and id 10 add the shooter's speed (id 10 twice). It bounces through the physics engine and explodes with linear splash (the detonation trigger is in the physics callbacks and isn't traced) |
+| 5 sonic cone | `0xbe9c` | **once**: every tank in front of the muzzle within `assist_max_dist` of the *weapon* row and within ±`assist_hdg` degrees horizontally takes the damage (the cone reuses the weapon's aim-assist columns) |
+| 6 sphere burst | `0xc2cc` | **once**: every tank within `explod_radius` + the Splash tweak takes the damage (no falloff) |
+
+**On hit** (`0x62f4`), in order:
+
+1. Apply the damage (§4.2).
+2. Knockback along the projectile's velocity.
+3. Vampire: the shooter heals `damage × steal_scale`.
+4. Burn, control-dampen and freeze effects, each if the projectile defines it.
+
+Splash explosions (`0x64e8`) do the same for every tank and breakable within the radius, using
+linear falloff.
 
 ### 4.4 Pickups, jump pads and specials (code, `0x2786c`)
 
@@ -291,6 +347,75 @@ large. Then the pad waits 0.125 s.
 Team specials and their recharge times are in `PSP_GAME_CODE.md` §7. The Team Special tweak
 subtracts 10/5 s from the recharge, and the fast-special cheat sets it to 3 s (15 s for Armor and
 Invisibility).
+
+### 4.5 Camera (code: `0x70918` update, `0x702f0` chase placement)
+
+**Views:** the offset table at `.data 0x24cff0` is indexed [view][tank size]. Each entry is an
+offset in the tank's frame (x, y, z) plus a pitch in degrees.
+
+| View | Small | Medium | Large |
+|---|---|---|---|
+| 0 near chase | (0, 5, −16), 2° | (0, 5, −18), 4° | (0, 6.5, −20), 2° |
+| 1 far chase | (0, 6, −36), 13° | (0, 7, −38), 19° | (0, 7, −40), 19° |
+| 2 first person | (0, 1.5, 0) | (0, 1.5, 0) | (0, 1.5, 0) |
+| 3 sniper / zoom | (0, 1.0, 0) | (0, 1.25, 0) | (0, 1.5, 0) |
+
+**Chase placement** (`0x702f0`, views 0/1):
+
+1. Build a level frame from the tank's heading, ignoring its pitch and roll.
+2. **Terrain look-ahead:** cast two rays down the collision world, from 10 m above to 40 m
+   below, one at the tank and one 20 m ahead. The height difference gives a slope pitch.
+3. Limit that pitch to ±10° (`0x24d0c8`/2); downhill it's ×0.75. Smooth it toward the target
+   at rate 3 (`0x24d0c4`).
+4. Pitch the frame by `viewPitch − slopePitch`. Offset it by `offset × 1.8` (`0x24d0e0`), with
+   Y additionally ×0.8.
+5. Smooth the result with a lag of 0.33 (`0x24d0c0`, `0x6e744`).
+6. **Look-at point:** raise it 5 m (`0x24d0dc`) above the tank. The lift shrinks linearly when
+   the first ray's hit is closer than 0.3.
+7. If the camera jumps more than `1.25 × 1.8 ×` the offset length in one frame, the game logs it
+   and snaps.
+
+**Other views:**
+
+| View | Behaviour |
+|---|---|
+| 2 (levelled) | the tank frame with half its pitch and roll removed (`0x24d0d8` = 0.5) |
+| 3 | attached to a weapon's scope frame (sniper weapons, `tank + 0x170`) |
+| 4 | fixed |
+| 5 | orbits at 15°/s about world up (intro and death) |
+
+**Shake** (`0x7020c`): a hit or explosion starts a shake of the given magnitude and duration.
+Each frame the camera moves by `rand(−2..2)·mag` in local x and y. A bigger shake replaces a
+smaller one. Death shakes use the motion table's death shake columns.
+
+### 4.6 Physics world (code: `PhysicsEngine.cpp` `0x4f9b0`, `0x4fd98`, `0x4ff4c`)
+
+- **Fixed 60 Hz physics.** Each frame's dt (clamped to 1/15 s) is added to an accumulator, and
+  the solver steps **1/60 s** while the accumulator is positive (`0x4fd98`). At 30 fps that's
+  2 physics steps per game update. The drive model (§3) still runs once per frame. In Unreal,
+  use a 1/60 substep for the tank bodies, or integrate twice per 30 Hz tick.
+- **Bodies** (`0x4ff4c`):
+  - **Tank:** mass 100, inertia 300, gravity (0, −30, 0), collision group 1 (`0x8f830`).
+  - **Everything else** (doors, breakables, dispensers, explosive shells): group 6, default
+    gravity −9.8 unless overridden (shells: −20, Mortar −240).
+- **Collision groups** (`0x4f9b0`): 7 groups with a pair table (collide = 2, ignore = 0):
+
+| | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|---|
+| **0** | – | ✓ | ✓ | ✓ | – | ✓ | ✓ |
+| **1** tank | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **2** | | | – | – | – | – | – |
+| **3** | | | | – | – | – | – |
+| **4** | | | | | – | ✓ (5,4) | – |
+| **5** | | | | | | ✓ | – |
+| **6** objects | | | | | | | ✓ |
+
+- **World collision:** against the level's `_coll.rws` mesh. Each triangle carries a material id.
+  Contact parameters come from 58 materials (`physics_materials.json`, from `.data 0x24c7c0`).
+  The raycast callback also reports the material (`bdInt.attr`), which the hover probe records.
+- **Not transcribed:** the solver itself (the `0x10xxxx`–`0x13xxxx` library). A port should use
+  the engine's physics with these masses, gravities, groups and materials. The tank's feel comes
+  from the drive and hover code (§3), which is exact.
 
 ## 5. Match rules
 
@@ -429,7 +554,6 @@ mapping. Use the PPSSPP debugger (memory view and breakpoints) with a module bas
   per-update, so behavior at other frame rates differs. Validate step 1 in §8.2.
 - **Scripted steering** (input `+0x10c`, a direction at input `+0x170…`) isn't modeled. It
   zeroes throttle and strafe and stops nitro; player and AI driving don't use it.
-- **Hitscan and explosive `velocity` semantics** (§4.3).
 - **Stick sign convention** and **BZ98R handedness** (§2) need one runtime check each.
 - The shipped tables here are from the US disc. The EU disc's tables may differ; run
   `build_port_tables.py` on each.
