@@ -1,0 +1,417 @@
+{
+ "source": "BOOT.BIN .data 0x24c7c0, 58 x 0x18 bytes (sub_04efdc)",
+ "note": "Contact material table, 0x18 bytes per row: +0 restitution, +4 friction, +8 grip, +0xc d. Per contact (0x11b658): mu = friction_A * friction_B, e = restitution_A * restitution_B, grip = (grip_A + grip_B) / 2; the impulse is in PORT_SPEC.md 4.6 (0x13661c, emulated). d is stored but the contact callback (0x4efdc) does not return it. Invalid ids fall back to restitution 0.5, friction 0.77, grip 1.0.",
+ "used_by": {
+  "0": "the world side of every world contact, and doors",
+  "11": "all five tank collision spheres",
+  "19": "contacts touching this material are dropped (0x11b844)"
+ },
+ "materials": [
+  {
+   "id": 0,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 1,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 2,
+   "restitution": 0.01,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 3,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.1,
+   "d": 0.5
+  },
+  {
+   "id": 4,
+   "restitution": 0.4,
+   "friction": 0.2,
+   "grip": 1.0,
+   "d": 0.1
+  },
+  {
+   "id": 5,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 6,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 7,
+   "restitution": 0.25,
+   "friction": 0.7,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 8,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 9,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 10,
+   "restitution": 0.1,
+   "friction": 0.8,
+   "grip": 1.0,
+   "d": 0.3
+  },
+  {
+   "id": 11,
+   "restitution": 0.15,
+   "friction": 0.3,
+   "grip": 0.0,
+   "d": 1.0
+  },
+  {
+   "id": 12,
+   "restitution": 0.8,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 13,
+   "restitution": 0.2,
+   "friction": 0.8,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 14,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 15,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.1,
+   "d": 1.0
+  },
+  {
+   "id": 16,
+   "restitution": 0.6,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 17,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 0.8,
+   "d": 1.0
+  },
+  {
+   "id": 18,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 19,
+   "restitution": 0.0,
+   "friction": 0.0,
+   "grip": 0.0,
+   "d": 0.0
+  },
+  {
+   "id": 20,
+   "restitution": 0.4,
+   "friction": 0.3,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 21,
+   "restitution": 0.95,
+   "friction": 0.3,
+   "grip": 0.1,
+   "d": 1.0
+  },
+  {
+   "id": 22,
+   "restitution": 0.2,
+   "friction": 0.7,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 23,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 24,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 25,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 26,
+   "restitution": 0.1,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 27,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 28,
+   "restitution": 0.01,
+   "friction": 0.35,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 29,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 30,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 31,
+   "restitution": 0.01,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 32,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.1,
+   "d": 0.5
+  },
+  {
+   "id": 33,
+   "restitution": 0.4,
+   "friction": 0.2,
+   "grip": 1.0,
+   "d": 0.1
+  },
+  {
+   "id": 34,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 35,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 36,
+   "restitution": 0.25,
+   "friction": 0.7,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 37,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 38,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 39,
+   "restitution": 0.1,
+   "friction": 0.8,
+   "grip": 1.0,
+   "d": 0.3
+  },
+  {
+   "id": 40,
+   "restitution": 0.65,
+   "friction": 0.35,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 41,
+   "restitution": 0.8,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 42,
+   "restitution": 0.2,
+   "friction": 0.8,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 43,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 44,
+   "restitution": 0.2,
+   "friction": 0.9,
+   "grip": 1.1,
+   "d": 1.0
+  },
+  {
+   "id": 45,
+   "restitution": 0.6,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 46,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 0.8,
+   "d": 1.0
+  },
+  {
+   "id": 47,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 48,
+   "restitution": 0.0,
+   "friction": 0.0,
+   "grip": 0.0,
+   "d": 0.0
+  },
+  {
+   "id": 49,
+   "restitution": 0.4,
+   "friction": 0.3,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 50,
+   "restitution": 0.95,
+   "friction": 0.3,
+   "grip": 0.1,
+   "d": 1.0
+  },
+  {
+   "id": 51,
+   "restitution": 0.2,
+   "friction": 0.7,
+   "grip": 1.0,
+   "d": 0.5
+  },
+  {
+   "id": 52,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 53,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 54,
+   "restitution": 0.65,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 55,
+   "restitution": 0.1,
+   "friction": 0.9,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 56,
+   "restitution": 0.55,
+   "friction": 0.84,
+   "grip": 1.0,
+   "d": 1.0
+  },
+  {
+   "id": 57,
+   "restitution": 0.01,
+   "friction": 0.35,
+   "grip": 1.0,
+   "d": 1.0
+  }
+ ]
+}

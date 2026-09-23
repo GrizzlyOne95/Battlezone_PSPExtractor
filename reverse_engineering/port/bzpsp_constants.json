@@ -681,6 +681,46 @@
    "ppsspp_address": "0x08a51f58",
    "evidence": "code",
    "note": "memory row order differs from CSV order"
+  },
+  {
+   "group": "tank",
+   "name": "nitro_overspeed_time",
+   "value": 3.0,
+   "unit": "s",
+   "address": "0x0900b0",
+   "ppsspp_address": "0x088940b0",
+   "evidence": "emulated",
+   "note": "set when a boost ends; excess speed bleeds by nitroMult per tick while it runs"
+  },
+  {
+   "group": "tank",
+   "name": "boost_pitch_input",
+   "value": 1.5,
+   "unit": "",
+   "address": "0x0954a0",
+   "ppsspp_address": "0x088994a0",
+   "evidence": "emulated",
+   "note": "pitch input replaces throttle while nitro is engaged and grounded (vtable +0xcc = 0x93b18)"
+  },
+  {
+   "group": "combat",
+   "name": "rand_vel_slow_effective",
+   "value": 0,
+   "unit": "",
+   "address": "0x0074ac",
+   "ppsspp_address": "0x0880b4ac",
+   "evidence": "code",
+   "note": "trunc.w.s before rand(): all shipped values (<1) truncate to 0, so no random slowdown"
+  },
+  {
+   "group": "combat",
+   "name": "frozen_shatter",
+   "value": true,
+   "unit": "",
+   "address": "0x099be8",
+   "ppsspp_address": "0x0889dbe8",
+   "evidence": "emulated",
+   "note": "vehicle +0x150 set by 0x9987c (Liquid Nitrogen); any positive damage sets HP to 0 first"
   }
  ]
 }

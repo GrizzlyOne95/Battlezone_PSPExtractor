@@ -7,7 +7,9 @@
 namespace bzpsp {
 
 float takeDamage(TankState& t, DamageState& d, float damage, int bulletId, float now) {
-    if (d.invulnerable || t.dead) return 0;
+    // 0x99be8 checks only invulnerability. It does not skip dead targets: the caller must, or
+    // the death handler runs again.
+    if (d.invulnerable) return 0;
 
     // 3-hit combo (0x98808): Swarm (bullet 14) x13, A.E. Fusion (bullet 8) x15 on the 3rd hit,
     // provided each gap between consecutive hits is <= 2 s; otherwise the oldest hit is dropped.
@@ -37,10 +39,12 @@ float takeDamage(TankState& t, DamageState& d, float damage, int bulletId, float
 
     if (d.armorActive) damage *= d.armorScale;
     if (d.shieldActive) {
-        if (d.shieldHp < damage) { damage -= d.shieldHp; d.shieldActive = false; d.shieldHp = 0; }
+        // Overflow passes through and switches the shield off; its hp field is left as is.
+        if (d.shieldHp < damage) { damage -= d.shieldHp; d.shieldActive = false; }
         else { d.shieldHp -= damage; damage = 0; }
     }
-    if (damage > 0) t.sinceDamage = 0;  // also breaks invisibility
+    if (d.frozen && damage > 0) t.hp = 0;  // Liquid Nitrogen: any hit shatters a frozen tank
+    if (damage > 0) t.sinceDamage = 0;
     t.hp -= damage;
     if (t.hp <= 0) { t.hp = 0; t.dead = true; }
     return damage;

@@ -87,6 +87,7 @@ constexpr float kAngularDecay = 10.0f;          // w *= (1 - 10 dt)
 constexpr float kReverseSpeedScale = 0.75f;
 constexpr float kAirControl = 0.25f;
 constexpr float kNitroRefillPerSec = 0.125f;
+constexpr float kNitroOverspeedTime = 3.0f;    // 0x900b0: speed bleed window after a boost
 constexpr float kOutOfWorldY = -225.0f;
 constexpr float kHoverTorqueScale = 0.4f;
 const Vec3 kHoverProbes[4] = {{2, 0, 2}, {-2, 0, 2}, {2, 0, -2}, {-2, 0, -2}};  // .data 0x24e0ac
@@ -95,6 +96,8 @@ const Vec3 kHoverProbes[4] = {{2, 0, 2}, {-2, 0, 2}, {2, 0, -2}, {-2, 0, -2}};  
 // ---------------------------------------------------------------------------------------------
 // Hover tank
 
+// Not modeled: input +0x10c (scripted steering toward a direction at input +0x170..; it zeroes
+// throttle and strafe and stops nitro). Player and AI driving leave it 0.
 struct TankInput {
     float steer = 0;     // input +0x284, -1..1
     float throttle = 0;  // input +0x288, -1..1 (negative = reverse)
@@ -137,6 +140,9 @@ struct TankState {
 
 struct Impulse { Vec3 linear, angular; };  // what 0xe11bc receives (v += J/m, L += tau)
 
+// End a boost (0x900b0): disengage and open the 3 s window that bleeds excess speed.
+void stopNitro(TankState& t);
+
 // Initialize a tank at spawn (0x9326c): HP, energy, speed from the motion table + tweaks.
 void spawnTank(TankState& t, const TankMotion& m, float topSpeedBonus);
 
@@ -164,13 +170,15 @@ struct DamageState {
     float armorScale = 1;              // vehicle +0x78
     bool shieldActive = false;         // vehicle +0x60 (Armor pickup)
     float shieldHp = 0;                // vehicle +0x64
+    bool frozen = false;               // vehicle +0x150 (Canada Liquid Nitrogen, 0x9987c)
     // 3-hit combo tracker (0x98808): per bullet id 14 (Swarm) and 8 (Fusion)
     std::array<std::array<float, 3>, 2> comboTimes{};
     std::array<int, 2> comboCount{{0, 0}};
 };
 
 // Vehicle::takeDamage core (0x99be8 + 0x98808). `bulletId` is the projectile def id (or -1),
-// `now` the match clock. Returns the damage actually removed from HP; sets t.dead at <= 0.
+// `now` the match clock (GameType +0x2c). Returns the damage removed from HP (after combo,
+// armor and shield); sets t.dead at <= 0. Order: combo, armor scale, shield, frozen shatter.
 float takeDamage(TankState& t, DamageState& d, float damage, int bulletId, float now);
 
 // Linear splash falloff used by explosions (0x64e8): damage * (1 - dist/radius) inside radius.
@@ -191,7 +199,8 @@ struct Projectile {
     float lockTimer = 0;
 };
 
-// Spawn (0x7328): speed = velocity + 5% of shooter speed (random slow not modeled here).
+// Spawn (0x7328): speed = velocity + 5% of shooter speed. The rand_vel_slow term is
+// truncated to an int before use (0x74ac), so it is always 0 with the shipped tables.
 Projectile spawnProjectile(const ProjectileDef& def, const Frame& muzzle, float shooterSpeed,
                            float weaponDamageBonus, float weaponStealBonus);
 
@@ -271,5 +280,71 @@ struct KoCore {
     void heal(float amount);
 };
 constexpr float kKoPadRadius = 20.0f, kKoPadTick = 1.0f, kKoPadCost = 10.0f, kKoPadRatio = 2.0f;
+
+// ---------------------------------------------------------------------------------------------
+// Collisions (physics library contact path 0x11b844/0x11b980 -> 0x11b658 -> 0x1461cc, and the
+// game's contact callbacks 0x3ee94/0x3f01c). See PORT_SPEC.md §4.6.
+
+// One row of the material table (.data 0x24c7c0, 58 rows x 0x18 bytes; physics_materials.json
+// restitution, friction, grip). The world side of every world contact is material 0; tank
+// spheres are 11.
+struct PhysMaterial { float restitution, friction, grip; };
+constexpr PhysMaterial kFallbackMaterial{0.5f, 0.77f, 1.0f};  // invalid id (0x4efdc)
+constexpr int kWorldMaterial = 0, kTankSphereMaterial = 11;
+constexpr int kNoContactMaterial = 19;  // 0x11b844: a contact touching material 19 is dropped
+
+// Per-contact coefficients (0x11b658): mu and e multiply, the grip factor averages.
+struct ContactCoeffs { float mu, e, c; };
+ContactCoeffs combineMaterials(const PhysMaterial& a, const PhysMaterial& b);
+
+// 3x3 matrix as RenderWare rows; mulRow(v) = v.x*r[0] + v.y*r[1] + v.z*r[2] (0x1b5df4).
+struct Mat3 {
+    Vec3 r[3];
+    Vec3 mulRow(const Vec3& v) const { return r[0] * v.x + r[1] * v.y + r[2] * v.z; }
+};
+
+// Impulse for one contact in the contact frame (z = normal pointing from B to A) (0x13661c).
+// vRel: relative contact velocity (approaching => vRel.z < 0). K: the contact's inverse-mass
+// matrix (impulse -> velocity change); Kinv its inverse.
+Vec3 contactImpulse(const ContactCoeffs& k, const Vec3& vRel, const Mat3& K, const Mat3& Kinv);
+
+// Penetration push-out after the impulse (0x145b2c). The push is depth*normal, clamped to 1 m,
+// shared by mass: A moves by push*mB/(mA+mB), B by -push*mA/(mA+mB). A body that is not an
+// awake dynamic body counts as mass 1e16; when both are awake and one is a tank (group 1), that
+// tank (A first) is treated as immovable, so tanks shove other objects and a tank-tank pair
+// pushes only body B.
+struct Separation { Vec3 moveA, moveB; };
+Separation separate(float depth, const Vec3& normal, float massA, float massB, bool awakeA,
+                    bool awakeB, bool tankA, bool tankB);
+
+// Tank collision shape (0x8f464): 6 spheres of radius 2.5 in tank-local space. Sphere 0 is a
+// bounding sphere (radius sqrt(34) + 2.5) used only for culling; spheres 1-5 collide.
+struct CollisionSphere { Vec3 center; float radius; };
+constexpr int kTankSphereCount = 5;
+extern const CollisionSphere kTankSpheres[kTankSphereCount];
+constexpr float kTankBoundRadius = 5.8309519f + 2.5f;
+
+// Game contact rules (return value of the pre-collide callback: 10 = normal contact, 9 = ignore).
+constexpr int kContactRespond = 10, kContactIgnore = 9;
+constexpr float kCrushDamage = 10000.0f;  // closing door (0x2aaac), Super Ram hit (0x93d20)
+
+// Tank touching a breakable (0x94014): returns the damage to apply, or 0 for none. Human
+// tanks need forward speed > 0.5 x max or a breakable below 5 hp; AI tanks always break it.
+// The breakable ignores further ram damage for 0.75 s (0x25024).
+float breakableRamDamage(float fwdSpeed, float maxFwdSpeed, bool human, float breakableHp);
+
+// Tank A ramming tank B (0x93d20) while A's slot-0 object (+0x1c4) is active and charged
+// (vtable +0x34 = 0x106b8) and its cooldown is over: B takes slotDamage x scale and an impact of
+// slotImpulse x scale along A's forward, where scale = min(0.75 x fwdSpeed / maxFwdSpeed, 1.5).
+// B must be in front of A: |dot(A.right, dir)| < 0.9 and dot(A.at, dir) >= 0 (0x1071c).
+float ramScale(float fwdSpeed, float maxFwdSpeed);
+bool ramInFront(const Frame& rammer, const Vec3& targetPos);
+
+// Explosive shells (Mortar id 18, Mines id 11, id 10) touching something (0x9ca8 / 0x9dc0).
+// Arm time: id 10 0.5 s, id 11 1.0 s, id 18 0.15 s (0x99a0). Before it the shell passes
+// through every object, its owner included; the world always bounces it (Mortar: explodes).
+float explosiveArmTime(int projectileId);
+struct ExplosiveContact { bool detonate; int result; };
+ExplosiveContact explosiveContact(int projectileId, float age, bool otherIsWorld, bool otherIsTank);
 
 }  // namespace bzpsp

@@ -47,6 +47,8 @@ Findings are documented in `reverse_engineering/PSP_GAME_CODE.md`.
 `reverse_engineering/port/` turns the findings into something you can reimplement:
 - `PORT_SPEC.md`: exact tank, weapon and match equations, axis conversions, engine notes and a
   PPSSPP validation plan
+- `PORT_AUDIT.md`: every gameplay system with its verification status
+- `AI_SPEC.md` (tank AI and controls) and `LEVEL_FORMAT.md` (`.LVL` entity records)
 - `bzpsp_constants.json`: code constants with their `BOOT.BIN` and PPSSPP addresses
 - `port_tables.json`: tank, tweak, weapon and projectile tables as normalized JSON; rebuild it from
   your own extraction:
@@ -55,7 +57,15 @@ Findings are documented in `reverse_engineering/PSP_GAME_CODE.md`.
 python scripts\build_port_tables.py --tables <data_tables_json or USRDIR\leveldata> --out port_tables.json
 ```
 
-- `reference/`: engine-neutral C++17 reference implementation with tests (`cmake -S reverse_engineering/port/reference -B build/ref`)
+- `reference/`: engine-neutral C++17 reference implementation with tests (`cmake -S reverse_engineering/port/reference -B build/ref`, then `ctest --test-dir build/ref`)
+- `validation/` + `golden/`: runs the game's own tank, damage and collision-impulse functions from `BOOT.BIN` under
+  the Unicorn CPU emulator (`pip install unicorn`) and records traces the reference must match:
+
+```powershell
+python reverse_engineering\port\validation\tank_traces.py
+python reverse_engineering\port\validation\damage_traces.py
+python reverse_engineering\port\validation\contact_traces.py
+```
 
 ## Source Requirements
 - Python 3.12+ on Windows
